@@ -1,0 +1,249 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "c509500f-1580-4526-9410-4463d96d9802",
+  "files": [],
+  "subMetas": {
+    "7c0d8": {
+      "importer": "gltf-mesh",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@7c0d8",
+      "displayName": "",
+      "id": "7c0d8",
+      "name": "SM_Crusher_crusher_1.001.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 2074
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "80c75": {
+      "importer": "gltf-mesh",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@80c75",
+      "displayName": "",
+      "id": "80c75",
+      "name": "Mesh.001.mesh",
+      "userData": {
+        "gltfIndex": 1,
+        "triangleCount": 280
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "b830e": {
+      "importer": "gltf-mesh",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@b830e",
+      "displayName": "",
+      "id": "b830e",
+      "name": "SM_Crusher_crusher_2.001.mesh",
+      "userData": {
+        "gltfIndex": 2,
+        "triangleCount": 2074
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "5e49e": {
+      "importer": "gltf-embeded-image",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@5e49e",
+      "displayName": "",
+      "id": "5e49e",
+      "name": "base_color_texture-0.image",
+      "userData": {
+        "gltfIndex": 0,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "ef396": {
+      "importer": "gltf-embeded-image",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@ef396",
+      "displayName": "",
+      "id": "ef396",
+      "name": "base_color_texture-1.image",
+      "userData": {
+        "gltfIndex": 1,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": false,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "0a1ef": {
+      "importer": "texture",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@0a1ef",
+      "displayName": "",
+      "id": "0a1ef",
+      "name": "base_color_texture-0.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "c509500f-1580-4526-9410-4463d96d9802@5e49e"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "05da8": {
+      "importer": "texture",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@05da8",
+      "displayName": "",
+      "id": "05da8",
+      "name": "base_color_texture-1.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "c509500f-1580-4526-9410-4463d96d9802@ef396"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "b569a": {
+      "importer": "gltf-material",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@b569a",
+      "displayName": "",
+      "id": "b569a",
+      "name": "Roll.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "1a492": {
+      "importer": "gltf-material",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@1a492",
+      "displayName": "",
+      "id": "1a492",
+      "name": "Rock.001.material",
+      "userData": {
+        "gltfIndex": 1
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "eab35": {
+      "importer": "gltf-scene",
+      "uuid": "c509500f-1580-4526-9410-4463d96d9802@eab35",
+      "displayName": "",
+      "id": "eab35",
+      "name": "SM_Shred.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [
+      {
+        "name": "base_color_texture",
+        "uri": "c509500f-1580-4526-9410-4463d96d9802@5e49e"
+      },
+      {
+        "name": "base_color_texture",
+        "uri": "c509500f-1580-4526-9410-4463d96d9802@ef396"
+      }
+    ],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "c509500f-1580-4526-9410-4463d96d9802@7c0d8",
+        "c509500f-1580-4526-9410-4463d96d9802@80c75",
+        "c509500f-1580-4526-9410-4463d96d9802@b830e"
+      ],
+      "skeletons": [],
+      "textures": [
+        "c509500f-1580-4526-9410-4463d96d9802@0a1ef",
+        "c509500f-1580-4526-9410-4463d96d9802@05da8"
+      ],
+      "materials": [
+        "c509500f-1580-4526-9410-4463d96d9802@b569a",
+        "c509500f-1580-4526-9410-4463d96d9802@1a492"
+      ],
+      "scenes": [
+        "c509500f-1580-4526-9410-4463d96d9802@eab35"
+      ]
+    }
+  }
+}

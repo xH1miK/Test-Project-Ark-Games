@@ -1,0 +1,182 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "e117e696-1336-4590-a65d-a4ee282071ac",
+  "files": [],
+  "subMetas": {
+    "b7c24": {
+      "importer": "gltf-mesh",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@b7c24",
+      "displayName": "",
+      "id": "b7c24",
+      "name": "Colonuim.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 332
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "bcbd8": {
+      "importer": "gltf-mesh",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@bcbd8",
+      "displayName": "",
+      "id": "bcbd8",
+      "name": "Gate.mesh",
+      "userData": {
+        "gltfIndex": 1,
+        "triangleCount": 12
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "5fcc4": {
+      "importer": "gltf-embeded-image",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@5fcc4",
+      "displayName": "",
+      "id": "5fcc4",
+      "name": "Diffuse Texture.image",
+      "userData": {
+        "gltfIndex": 0,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "bb7f2": {
+      "importer": "texture",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@bb7f2",
+      "displayName": "",
+      "id": "bb7f2",
+      "name": "Diffuse Texture.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "e117e696-1336-4590-a65d-a4ee282071ac@5fcc4"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f8248": {
+      "importer": "gltf-material",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@f8248",
+      "displayName": "",
+      "id": "f8248",
+      "name": "tripo_mat_3544e94c.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "db4d2": {
+      "importer": "gltf-material",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@db4d2",
+      "displayName": "",
+      "id": "db4d2",
+      "name": "02 - Default.material",
+      "userData": {
+        "gltfIndex": 1
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "a0356": {
+      "importer": "gltf-scene",
+      "uuid": "e117e696-1336-4590-a65d-a4ee282071ac@a0356",
+      "displayName": "",
+      "id": "a0356",
+      "name": "Door.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [
+      {
+        "name": "Diffuse Texture",
+        "uri": "e117e696-1336-4590-a65d-a4ee282071ac@5fcc4"
+      }
+    ],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "e117e696-1336-4590-a65d-a4ee282071ac@b7c24",
+        "e117e696-1336-4590-a65d-a4ee282071ac@bcbd8"
+      ],
+      "skeletons": [],
+      "textures": [
+        "e117e696-1336-4590-a65d-a4ee282071ac@bb7f2"
+      ],
+      "materials": [
+        "e117e696-1336-4590-a65d-a4ee282071ac@f8248",
+        "e117e696-1336-4590-a65d-a4ee282071ac@db4d2"
+      ],
+      "scenes": [
+        "e117e696-1336-4590-a65d-a4ee282071ac@a0356"
+      ]
+    }
+  }
+}

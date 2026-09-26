@@ -1,0 +1,376 @@
+{
+  "ver": "2.3.14",
+  "importer": "gltf",
+  "imported": true,
+  "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c",
+  "files": [],
+  "subMetas": {
+    "ce17d": {
+      "importer": "gltf-mesh",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@ce17d",
+      "displayName": "",
+      "id": "ce17d",
+      "name": "Tractor_Tier2.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 1602
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "7b3d7": {
+      "importer": "gltf-mesh",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@7b3d7",
+      "displayName": "",
+      "id": "7b3d7",
+      "name": "Zombie_2gr.mesh",
+      "userData": {
+        "gltfIndex": 1,
+        "triangleCount": 3153
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "c7f55": {
+      "importer": "gltf-mesh",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@c7f55",
+      "displayName": "",
+      "id": "c7f55",
+      "name": "Tractor_Tier1_Tire.mesh",
+      "userData": {
+        "gltfIndex": 2,
+        "triangleCount": 910
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "3109f": {
+      "importer": "gltf-embeded-image",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@3109f",
+      "displayName": "",
+      "id": "3109f",
+      "name": "Machine_Parts_Teal_GUESS.png.image",
+      "userData": {
+        "gltfIndex": 0,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "f2ff5": {
+      "importer": "gltf-embeded-image",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@f2ff5",
+      "displayName": "",
+      "id": "f2ff5",
+      "name": "Zombie_Character_Texture_GUESS.png.image",
+      "userData": {
+        "gltfIndex": 1,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "4aa68": {
+      "importer": "gltf-embeded-image",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@4aa68",
+      "displayName": "",
+      "id": "4aa68",
+      "name": "Amber_Ore_Cluster_GUESS.png.image",
+      "userData": {
+        "gltfIndex": 2,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "098e2": {
+      "importer": "gltf-embeded-image",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@098e2",
+      "displayName": "",
+      "id": "098e2",
+      "name": "UI_Arrow_Icon_B_GUESS.png.image",
+      "userData": {
+        "gltfIndex": 3,
+        "fixAlphaTransparencyArtifacts": true,
+        "hasAlpha": true,
+        "type": "texture"
+      },
+      "ver": "1.0.3",
+      "imported": true,
+      "files": [
+        ".json",
+        ".png"
+      ],
+      "subMetas": {}
+    },
+    "3effa": {
+      "importer": "texture",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@3effa",
+      "displayName": "",
+      "id": "3effa",
+      "name": "UnnamedTexture-0.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4625e66a-aa07-42c9-af55-d41f53607f9c@3109f"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "221a5": {
+      "importer": "texture",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@221a5",
+      "displayName": "",
+      "id": "221a5",
+      "name": "UnnamedTexture-1.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4625e66a-aa07-42c9-af55-d41f53607f9c@f2ff5"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "0089c": {
+      "importer": "texture",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@0089c",
+      "displayName": "",
+      "id": "0089c",
+      "name": "UnnamedTexture-2.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4625e66a-aa07-42c9-af55-d41f53607f9c@4aa68"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "9b633": {
+      "importer": "texture",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@9b633",
+      "displayName": "",
+      "id": "9b633",
+      "name": "UnnamedTexture-3.texture",
+      "userData": {
+        "wrapModeS": "repeat",
+        "wrapModeT": "repeat",
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "linear",
+        "anisotropy": 0,
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4625e66a-aa07-42c9-af55-d41f53607f9c@098e2"
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "78ab6": {
+      "importer": "gltf-material",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@78ab6",
+      "displayName": "",
+      "id": "78ab6",
+      "name": "Tractor_Recolor.mtl.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "82c68": {
+      "importer": "gltf-material",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@82c68",
+      "displayName": "",
+      "id": "82c68",
+      "name": "Zombie.mtl.material",
+      "userData": {
+        "gltfIndex": 1
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "866a1": {
+      "importer": "gltf-material",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@866a1",
+      "displayName": "",
+      "id": "866a1",
+      "name": "ZombieHat.mtl.material",
+      "userData": {
+        "gltfIndex": 2
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "01400": {
+      "importer": "gltf-material",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@01400",
+      "displayName": "",
+      "id": "01400",
+      "name": "Tractor_Tire_Detail.mtl.material",
+      "userData": {
+        "gltfIndex": 3
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "07f40": {
+      "importer": "gltf-scene",
+      "uuid": "4625e66a-aa07-42c9-af55-d41f53607f9c@07f40",
+      "displayName": "",
+      "id": "07f40",
+      "name": "Tractor2.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [
+      {
+        "name": "Machine_Parts_Teal_GUESS.png",
+        "uri": "4625e66a-aa07-42c9-af55-d41f53607f9c@3109f"
+      },
+      {
+        "name": "Zombie_Character_Texture_GUESS.png",
+        "uri": "4625e66a-aa07-42c9-af55-d41f53607f9c@f2ff5"
+      },
+      {
+        "name": "Amber_Ore_Cluster_GUESS.png",
+        "uri": "4625e66a-aa07-42c9-af55-d41f53607f9c@4aa68"
+      },
+      {
+        "name": "UI_Arrow_Icon_B_GUESS.png",
+        "uri": "4625e66a-aa07-42c9-af55-d41f53607f9c@098e2"
+      }
+    ],
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@ce17d",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@7b3d7",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@c7f55"
+      ],
+      "skeletons": [],
+      "textures": [
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@3effa",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@221a5",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@0089c",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@9b633"
+      ],
+      "materials": [
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@78ab6",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@82c68",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@866a1",
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@01400"
+      ],
+      "scenes": [
+        "4625e66a-aa07-42c9-af55-d41f53607f9c@07f40"
+      ]
+    }
+  }
+}

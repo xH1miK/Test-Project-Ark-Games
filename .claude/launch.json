@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "example",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve.mjs", "reference/example", "8431"],
+      "port": 8431
+    },
+    {
+      "name": "dist",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve.mjs", "dist", "8432"],
+      "port": 8432
+    }
+  ]
+}

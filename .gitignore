@@ -1,0 +1,37 @@
+
+#///////////////////////////
+# Cocos Creator 3D Project
+#///////////////////////////
+library/
+temp/
+local/
+build/
+profiles/
+native
+#//////////////////////////
+# NPM
+#//////////////////////////
+node_modules/
+
+#//////////////////////////
+# VSCode
+#//////////////////////////
+.vscode/
+
+#//////////////////////////
+# WebStorm
+#//////////////////////////
+.idea/
+#//////////////////////////
+# Project-specific
+#//////////////////////////
+# Decoded data from the employer's example — local reference only
+reference/
+# Third-party editor extension, installed per machine (docs/SETUP.md)
+extensions/funplay-cocos-mcp/
+# Claude Code per-user settings
+.claude/settings.local.json
+# Tool outputs
+tools/**/node_modules/
+dist/
+*.log

@@ -1,0 +1,96 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "e47b7208-38c2-4402-962f-94243f440886",
+  "files": [],
+  "subMetas": {
+    "fd4ba": {
+      "importer": "gltf-mesh",
+      "uuid": "e47b7208-38c2-4402-962f-94243f440886@fd4ba",
+      "displayName": "",
+      "id": "fd4ba",
+      "name": "tripo_node_9a78e905.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 934
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f00b9": {
+      "importer": "gltf-material",
+      "uuid": "e47b7208-38c2-4402-962f-94243f440886@f00b9",
+      "displayName": "",
+      "id": "f00b9",
+      "name": "tripo_mat_9a78e905.material",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "9d768": {
+      "importer": "gltf-scene",
+      "uuid": "e47b7208-38c2-4402-962f-94243f440886@9d768",
+      "displayName": "",
+      "id": "9d768",
+      "name": "Purple Rocks_1.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "e47b7208-38c2-4402-962f-94243f440886@fd4ba"
+      ],
+      "skeletons": [],
+      "textures": [],
+      "materials": [
+        "e47b7208-38c2-4402-962f-94243f440886@f00b9"
+      ],
+      "scenes": [
+        "e47b7208-38c2-4402-962f-94243f440886@9d768"
+      ]
+    }
+  }
+}
