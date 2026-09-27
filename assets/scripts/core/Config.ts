@@ -51,8 +51,11 @@ export const Config = {
     /** Acceleration and braking, units/s². */
     accel: 14,
     brake: 22,
-    /** Circle-vs-obstacle resolve passes per step. */
-    collisionPasses: 2,
+    /**
+     * Circle-vs-obstacle resolve passes per step (stops early once nothing pushes). Pockets between
+     * rotated rocks need 4 to stay under 0.05 penetration at 4 fps; each pass halves what is left.
+     */
+    collisionPasses: 4,
     /** Longest movement step, s; slower frames are split into several steps. */
     maxStep: 1 / 30,
   },

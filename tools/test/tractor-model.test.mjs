@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { Config } from '../../assets/scripts/core/Config.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
 
@@ -116,6 +117,32 @@ test('ramming a corner keeps penetration under 0.05, even at 4 fps', () => {
     assert.ok(worst <= 0.05, `${fps} fps: penetration ${worst}`);
     near(tractor.bodyX, 3 - 1.2, 0.05);
     near(tractor.bodyZ, 5 - 1.2, 0.05);
+  }
+});
+
+test('the real south-east corner of the arena: penetration under 0.05 at any FPS and tier (Config tuning)', () => {
+  // Rock blockers of Main.scene around (15.6, 17.6), dumped from the running game on 27.09. The rotated
+  // boxes make a pocket where 2 resolve passes left 0.073 at 4 fps; each extra pass halves the rest.
+  const corner = [
+    { x: 20.5442, z: 14.9408, halfX: 3.9818, halfZ: 3.6434, angle: -1.46922 },
+    { x: 18.4007, z: 20.7408, halfX: 3.4246, halfZ: 1.6111, angle: -1.7659 },
+    { x: 11.659, z: 21.4339, halfX: 3.9279, halfZ: 1.8479, angle: 0.18024 },
+    { x: 18.4056, z: 22.7288, halfX: 2.8663, halfZ: 3.4413, angle: -1.40242 },
+    { x: 21.2035, z: 20.3849, halfX: 3.5562, halfZ: 4.2696, angle: -0.05194 },
+  ];
+  for (const tier of Config.tractor.tiers) {
+    for (const fps of [60, 7, 4]) {
+      const grid = new ObstacleGrid(Config.world.bounds, Config.world.cellSize);
+      for (const box of corner) grid.add({ kind: 'box', ...box });
+      const tractor = new TractorModel(Config.tractor, tier, grid);
+      tractor.place(10.85, 12.07, Math.PI / 4);
+      let worst = 0;
+      for (let i = 0; i < fps * 3; i++) {
+        tractor.update(1 / fps, 0.7, 0.7);
+        worst = Math.max(worst, penetration(tractor, grid));
+      }
+      assert.ok(worst <= 0.05, `speed ${tier.speed}, ${fps} fps: penetration ${worst.toFixed(4)}`);
+    }
   }
 });
 
