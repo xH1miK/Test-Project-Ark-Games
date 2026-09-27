@@ -106,7 +106,8 @@ async function connect(wsUrl) {
 
 const PROBE = `(() => {
   const cc = window.cc, d = cc && cc.director, s = d && d.getScene();
-  return { frames: d ? d.getTotalFrames() : 0, scene: s ? s.name : null, timing: window.__ZM_TIMING__,
+  // The editor preview loads the scene without its asset name.
+  return { frames: d ? d.getTotalFrames() : 0, scene: s && s.children.length ? s.name || '(preview)' : null, timing: window.__ZM_TIMING__,
            loaderGone: !document.getElementById('zm-loading'),
            loaderError: document.getElementById('zm-loading')?.getAttribute('data-error') || null };
 })()`;
