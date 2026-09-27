@@ -79,6 +79,7 @@ export class GameRoot extends Component {
     cameraView.render(this.camera);
 
     exposeForQa({
+      config: Config,
       obstacles: this.obstacles,
       events: this.events,
       joystick: this.joystick,
