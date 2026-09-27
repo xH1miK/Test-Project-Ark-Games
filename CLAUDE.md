@@ -54,7 +54,7 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 - `node tools/build.mjs` — web-mobile build inside the open editor (builder `add-task` via MCP) from `build-config/web-mobile.json`: Debug / source maps / MD5 off, Merge All JSON, mangle + inline enums. CLI build only with the editor closed (EPERM otherwise).
 - Feature Cropping (`settings/v2/packages/engine.json`; change through `Editor.Profile`, not by hand while the editor is open): base, gfx-webgl, 3d, 2d, ui, audio, tween, legacy-pipeline. Add a module only when code needs it, then re-measure.
 - `node tools/pack/pack.mjs` → `dist/ZombieMiner.html` + size report (hard limit 5,000,000 bytes, target ≤ 4.8 MB; empty scene = 0.56 MB).
-- `node tools/check-html.mjs dist/ZombieMiner.html` — headless Edge from `file://`, portrait + landscape: zero external requests, no console errors, scene running; screenshots in `dist/shots/`.
+- `node tools/check-html.mjs dist/ZombieMiner.html` — headless Edge from `file://`, portrait + landscape: zero external requests, no console errors, scene running; screenshots in `dist/shots/`. `--scenario <name>` runs `tools/scenarios/<name>.mjs` (adds `?qa`); an http target (`http://localhost:7456/`, the editor preview) is quicker while iterating; `--gpu` uses the real GPU for FPS numbers (default SwiftShader is software GL: deterministic, but slow on big PBR surfaces). Note: classes like `MeshRenderer` are not on the runtime `cc` namespace — use `cc.js.getClassByName('cc.MeshRenderer')` in page scripts.
 - The Cocos splash is off through the builder option `useSplashScreen: false` (the user unchecked Enable Splash on 27.09). Never patch it out of the build output.
 
 ## Art

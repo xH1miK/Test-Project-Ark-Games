@@ -70,12 +70,24 @@ export default async function level(t) {
   const r = await t.evaluate(SAMPLE);
   t.log(`obstacles ${r.count}; tractor area ${r.tractor.area} u², ball area ${r.balls.area} u²`);
   t.log(`collision map (S start, U upgrade pad, G gate pad, H shredder; # solid, . tractor, , balls only):\n${r.map}`);
-  t.check(r.count >= 40, `obstacle grid built from the scene (${r.count} blockers)`);
+  t.check(r.count > 2, `obstacle grid built from the scene (${r.count} blockers: walls, shredder, gate)`);
   t.check(!r.tractor.leak, 'arena closed for the tractor (radius 1.2)');
   t.check(!r.balls.leak, 'arena closed for balls (radius 0.275)');
   t.check(r.reached.U, 'upgrade pad spot reachable from the start');
   t.check(r.reached.G, 'gate pad spot reachable from the start');
   t.check(r.shredderZone > 10, `shredder hand-in zone reachable (${r.shredderZone} sample points)`);
+
+  // Static batching: every rock merged into one renderer (Level/WallsBatched).
+  const draw = await t.evaluate(`(() => {
+    const MeshRenderer = cc.js.getClassByName('cc.MeshRenderer'); // not on the runtime 'cc' namespace
+    const batched = cc.find('Level/WallsBatched');
+    const renderer = batched && batched.getComponent(MeshRenderer);
+    const rocks = cc.find('Level/Walls').getComponentsInChildren(MeshRenderer);
+    return { batched: !!(renderer && renderer.enabled), rocks: rocks.length, stillOn: rocks.filter(m => m.enabled).length,
+             drawCalls: cc.director.root.device.numDrawCalls };
+  })()`);
+  t.log(`draw calls ${draw.drawCalls}; rocks ${draw.rocks}, individually drawn ${draw.stillOn}`);
+  t.check(draw.batched && draw.stillOn === 0, `rock walls drawn as one batched mesh (${draw.rocks} rocks)`);
   await t.shot('level');
 
   // Overview for layout review: pull the camera back along its own view direction, then restore it.
