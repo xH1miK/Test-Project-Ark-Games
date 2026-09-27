@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Open a packed playable from file:// in headless Edge/Chrome (DevTools protocol) and check it:
-// zero network requests, no console errors, the scene starts, FPS; saves a screenshot per viewport.
+// Open the game in headless Edge/Chrome (DevTools protocol) and check it: zero requests outside the
+// target, no console errors, the scene starts, FPS; saves a screenshot per viewport. Optionally runs a
+// scenario (tools/scenarios/<name>.mjs) that drives the game through the ?qa hooks (window.__zm).
 //
-//   node tools/check-html.mjs dist/ZombieMiner.html [--size 390x844] [--size 844x390] [--wait 15]
-//                            [--query zm-inflate=js] [--shots dist/shots]
+//   node tools/check-html.mjs [dist/ZombieMiner.html | http://localhost:7456/] [--size 390x844] [--size 844x390]
+//                            [--wait 15] [--query zm-inflate=js] [--shots dist/shots] [--scenario level]
 //
-// Env: CHROME_PATH to override the browser. Exit code 1 if any check fails.
+// A file is opened from file:// (the real ad-network condition); an http URL (e.g. the editor preview)
+// is handy while iterating. Env: CHROME_PATH to override the browser. Exit code 1 if any check fails.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,10 +23,20 @@ const takeAll = (name) => {
 };
 const sizes = takeAll('--size');
 const waitSec = Number(takeAll('--wait')[0] || 15);
-const query = takeAll('--query')[0];
+const scenarioName = takeAll('--scenario')[0];
+const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1'].filter(Boolean);
 const shotsDir = resolve(takeAll('--shots')[0] || 'dist/shots');
-const file = resolve(argv[0] || 'dist/ZombieMiner.html');
+const target = argv[0] || 'dist/ZombieMiner.html';
 if (!sizes.length) sizes.push('390x844', '844x390'); // phone portrait + landscape (CSS px)
+
+const isHttp = /^https?:\/\//.test(target);
+const baseUrl = isHttp ? target : pathToFileURL(resolve(target)).href;
+const url = baseUrl + (queryParts.length ? `${baseUrl.includes('?') ? '&' : '?'}${queryParts.join('&')}` : '');
+const label = isHttp ? new URL(target).host.replace(/\W+/g, '_') : basename(target, '.html');
+/** Requests that stay inside the playable: the file itself, blob:/data: URLs, or the same http origin. */
+const isInternal = (u) => /^(blob|data):/.test(u) || (isHttp ? u.startsWith(new URL(target).origin) : u.split('?')[0] === baseUrl);
+
+const scenario = scenarioName ? (await import(pathToFileURL(resolve(`tools/scenarios/${scenarioName}.mjs`)).href)).default : null;
 
 const BROWSERS = [
   process.env.CHROME_PATH,
@@ -86,7 +98,7 @@ async function connect(wsUrl) {
     });
   const evaluate = async (expression) => {
     const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
     return r.result.value;
   };
   return { send, evaluate, on: (fn) => listeners.push(fn), close: () => ws.close() };
@@ -94,16 +106,52 @@ async function connect(wsUrl) {
 
 const PROBE = `(() => {
   const cc = window.cc, d = cc && cc.director, s = d && d.getScene();
-  return { frames: d ? d.getTotalFrames() : 0, scene: s ? s.name : null, timing: window.__ZM_TIMING__,
+  // The editor preview loads the scene without its asset name.
+  return { frames: d ? d.getTotalFrames() : 0, scene: s && s.children.length ? s.name || '(preview)' : null, timing: window.__ZM_TIMING__,
            loaderGone: !document.getElementById('zm-loading'),
            loaderError: document.getElementById('zm-loading')?.getAttribute('data-error') || null };
 })()`;
 const FPS = `new Promise((ok) => { const d = cc.director, f0 = d.getTotalFrames(), t0 = performance.now();
   setTimeout(() => ok((d.getTotalFrames() - f0) * 1000 / (performance.now() - t0)), 2000); })`;
 
+/** Helpers handed to a scenario: page access, waiting, screenshots, soft assertions. */
+function scenarioContext(cdp, size, results) {
+  const shot = async (name) => {
+    const file = join(shotsDir, `${label}-${size}-${name}.png`);
+    writeFileSync(file, Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    results.shots.push(file);
+    return file;
+  };
+  return {
+    size,
+    shotsDir,
+    evaluate: cdp.evaluate,
+    sleep,
+    shot,
+    log: (...args) => results.log.push(args.join(' ')),
+    check: (ok, message) => {
+      results.checks.push({ ok: !!ok, message });
+      return !!ok;
+    },
+    /** Waits until `expression` is truthy in the page; returns its value or throws on timeout. */
+    waitFor: async (expression, timeoutMs = 10000) => {
+      const t0 = Date.now();
+      for (;;) {
+        const v = await cdp.evaluate(expression).catch(() => null);
+        if (v) return v;
+        if (Date.now() - t0 > timeoutMs) throw new Error(`timeout waiting for: ${expression}`);
+        await sleep(100);
+      }
+    },
+    /** Waits for n more engine frames. */
+    frames: (n) => cdp.evaluate(`new Promise((ok) => { const d = cc.director, f = d.getTotalFrames() + ${n};
+      const tick = () => d.getTotalFrames() >= f ? ok(true) : requestAnimationFrame(tick); tick(); })`),
+  };
+}
+
 let failed = false;
-const url = pathToFileURL(file).href + (query ? `?${query}` : '');
-console.log(`${basename(file)}  (${(readFileSync(file).length / 1e6).toFixed(3)} MB) in ${basename(exe)}`);
+console.log(`${label}${isHttp ? '' : `  (${(readFileSync(target).length / 1e6).toFixed(3)} MB)`} in ${basename(exe)}` +
+  (scenarioName ? `, scenario: ${scenarioName}` : ''));
 mkdirSync(shotsDir, { recursive: true });
 
 await withBrowser(async (cdp) => {
@@ -135,21 +183,33 @@ await withBrowser(async (cdp) => {
       probe = await cdp.evaluate(PROBE).catch(() => null);
     } while ((!probe || !probe.scene || probe.frames < 10) && !probe?.loaderError && Date.now() - t0 < waitSec * 1000);
     const fps = probe?.scene ? await cdp.evaluate(FPS) : 0;
-    const shot = join(shotsDir, `${basename(file, '.html')}-${size}${query ? '-' + query.replace(/\W+/g, '_') : ''}.png`);
+    const shot = join(shotsDir, `${label}-${size}${queryParts.length ? '-' + queryParts.join('_').replace(/\W+/g, '_') : ''}.png`);
     writeFileSync(shot, Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
 
-    const external = requests.filter((u) => u !== url && !/^(blob|data):/.test(u));
+    const results = { checks: [], log: [], shots: [] };
+    if (scenario && probe?.scene) {
+      try {
+        await scenario(scenarioContext(cdp, size, results));
+      } catch (err) {
+        results.checks.push({ ok: false, message: `scenario threw: ${err.message}` });
+      }
+    }
+
+    const external = requests.filter((u) => !isInternal(u));
     const t = probe?.timing || {};
     const ms = (a, b) => (t[a] != null && t[b] != null ? `${(t[b] - t[a]).toFixed(0)} ms` : '-');
-    const ok = probe?.scene && probe.loaderGone && external.length === 0 && problems.length === 0;
+    const scenarioOk = results.checks.every((c) => c.ok);
+    const ok = probe?.scene && probe.loaderGone && external.length === 0 && problems.length === 0 && scenarioOk;
     failed ||= !ok;
     console.log(`\n[${size}] ${ok ? 'PASS' : 'FAIL'}  scene=${probe?.scene} loaderGone=${probe?.loaderGone} frames=${probe?.frames} fps≈${fps.toFixed(0)}` +
       (t.jsInflate ? ' (JS inflate)' : ''));
-    console.log(`  timing: decode ${ms('start', 'base64')}, inflate ${ms('base64', 'inflate')}, engine+scene ${ms('boot', 'firstFrames')}, total ${ms('start', 'firstFrames')}`);
-    console.log(`  requests: ${requests.length} total, ${external.length} outside the file` + external.map((u) => `\n    ${u}`).join(''));
+    if (!isHttp) console.log(`  timing: decode ${ms('start', 'base64')}, inflate ${ms('base64', 'inflate')}, engine+scene ${ms('boot', 'firstFrames')}, total ${ms('start', 'firstFrames')}`);
+    console.log(`  requests: ${requests.length} total, ${external.length} outside the target` + external.map((u) => `\n    ${u}`).join(''));
     if (probe?.loaderError) console.log(`  loader error: ${probe.loaderError}`);
     for (const p of problems) console.log(`  ${p}`);
-    console.log(`  screenshot: ${shot}`);
+    for (const line of results.log) console.log(`  | ${line.split('\n').join('\n  | ')}`);
+    for (const c of results.checks) console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} ${c.message}`);
+    console.log(`  screenshots: ${[shot, ...results.shots].join('\n               ')}`);
   }
 });
 process.exit(failed ? 1 : 0);

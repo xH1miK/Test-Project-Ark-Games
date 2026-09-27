@@ -83,3 +83,22 @@ Decisions: keep the legacy pipeline (−49 KB, both render). The 3D ParticleSyst
 | 13:52 | Scripted builds had left 5 identical tasks in the Build panel → `remove-task(id)` removes only the list entry (build files stay); `tools/build.mjs` now drops older tasks after a successful build | AI | Panel shows one task; rebuild byte-identical |
 | 13:56 | Pushed the stage to GitHub (6 commits, 37 text files; reviewed the list first: no build output, no secrets) | AI (on user's request) | `main` = `origin/main` |
 | 13:58 | Wrote the handoff prompt for the next session (stage "Core") → `docs/HANDOFF.md`; the user continues in a new chat opened after the editor, so MCP connects at start | AI → human | — |
+
+## 2026-09-27 (Sun) — Stage "Core", M1: scaffolding and level (~14:03–16:30)
+
+New session from the handoff prompt. Working rules added by the user: a git branch per milestone, merge to `main` only after verification; code by MVP/OOP/SOLID; tell when to move to a new chat.
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 14:03 | Read PLAN/GDD/teardown/log; MCP up (`get_editor_state`); proposed 7 milestones with done-criteria and checks | AI | — |
+| 15:55 | Plan approved; branch `core/m1-level`. `tools/merge.mjs`: `--no-ff` merge into main via `merge-tree`/`commit-tree`/`update-ref`, so the open editor never sees files flip back to main | human → AI | `--dry-run` on the branch |
+| 15:58 | Measured the asset-pack models in the scene process (bounds, pivots): rocks ≈1×0.4×0.5, gate ≈1×0.8×1 (scale ×8.5), tractor GLB child offset (6.97, −0.05, 21.4) to zero later | AI | — |
+| 16:00 | Pure-TS models: `Config`, typed `EventBus`, `ObstacleGrid` (circles + oriented boxes in a CSR grid, Cocos Y-rotation convention); components `StaticBlocker` (box/circle/mesh-fitted), `GameRoot` (composition root), `QaBridge` (`?qa` → `window.__zm`) | AI | Node 24 runs the `.ts` directly: 12 unit tests (1 wrong expectation in my own test, code was right) |
+| 16:02 | Strict type check with the tsc bundled in Cocos: MCP diagnostics showed 88 errors, all inside engine `.d.ts` → `skipLibCheck` + `strict` in `tsconfig.json`, `tools/typecheck.mjs` | AI | `--listFiles` confirms our 6 files are checked; 0 errors |
+| 16:04 | Ground texture from GPT-image: sharp in Cocos' install can't load outside Electron (deps inside `app.asar`) → pinned sharp in `tools/art`, `prepare.mjs` (1254 px PNG → 512 JPEG, 21 KB) | AI | 2×2 tiling preview: seamless |
+| 16:05 | Ground material created in the scene process (`EditorExtends.serialize` → `asset-db`). **Bug:** the serializer baked the editor pipeline macros (`CC_USE_HDR`, fog, shadows…) into `_defines` → stripped `CC_*` | AI | Compared with an editor-made material from the pack (`_defines: [{}]`) |
+| 16:07 | **Incident:** the material URL `db://assets/materials` (lower case) vs existing `assets/Materials` (FBX import). Windows paths are case-insensitive, asset-db URLs are not → the folder got registered twice and its files re-UUIDed; the gate FBX lost its dumped-material reference | AI | Found by `git status` (3 metas with new UUIDs) + asset-db query (two trees) |
+| 16:10 | Fix: user closed the editor; restoring metas + deleting `library/` in one command was **blocked by the permission classifier** (irreversible) → switched to a reversible variant: metas from git, `library/` moved to a backup folder; user reopened the project | human + AI | Re-import: one `Materials` tree, original UUIDs, no meta changed. Rule added to CLAUDE.md |
+| 16:21 | Level via MCP in one scene script: ground (plane ×12, unlit tiled), 38 rocks in 4 walls (tall far walls, low near walls, seeded jitter), gate house, spots; shredder as a **linked prefab instance** under a transform node (`scene:create-node`); 40 StaticBlockers; `Game` + GameRoot; iso camera | AI | Read back the saved `.scene`: 40 blockers, 1 prefab instance, GameRoot → Level |
+| 16:23 | `check-html` extended: http targets (editor preview) and `--scenario`; `tools/scenarios/level.mjs` — flood fill from the start for tractor (r 1.2) and balls (r 0.275), reachability of pads and shredder zone, ASCII collision map, overview shot | AI | First run: preview scene has no name → loader probe fixed; then PASS |
+| 16:26 | Build (34 s) → pack → check from `file://` | AI | **PASS** portrait + landscape, 0 external requests. HTML **1.568 MB** (+1.0 MB: gate/shredder/rock meshes ≈0.7 MB raw, 2 PBR shader sources, gate JPEG). SwiftShader ≈15 fps (software GL) |

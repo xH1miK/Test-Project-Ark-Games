@@ -4,6 +4,8 @@
 
   /* Add your custom configuration here. */
   "compilerOptions": {
-    "strict": false
+    "strict": true,
+    /* The engine's own declarations do not type-check cleanly; check only our code. */
+    "skipLibCheck": true
   }
 }
