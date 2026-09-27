@@ -88,7 +88,7 @@
       "userData": {
         "gltfIndex": 1,
         "fixAlphaTransparencyArtifacts": true,
-        "hasAlpha": false,
+        "hasAlpha": true,
         "type": "texture"
       },
       "ver": "1.0.3",

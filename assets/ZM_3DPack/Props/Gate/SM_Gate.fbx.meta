@@ -37,7 +37,7 @@
         "mipfilter": "linear",
         "anisotropy": 0,
         "isUuid": false,
-        "imageUuidOrDatabaseUri": "db://assets/Models/Props/SM_Gate.fbm/tripo_image_717ef0be-fa0a-4d8b-b1ea-e8b5a33be575_0_0.jpg"
+        "imageUuidOrDatabaseUri": "db://assets/ZM_3DPack/Props/Gate/SM_Gate.fbm/tripo_image_717ef0be-fa0a-4d8b-b1ea-e8b5a33be575_0_0.jpg"
       },
       "ver": "1.0.22",
       "imported": true,
@@ -67,7 +67,7 @@
     "imageMetas": [
       {
         "name": "base_color_texture",
-        "uri": "db://assets/Models/Props/SM_Gate.fbm/tripo_image_717ef0be-fa0a-4d8b-b1ea-e8b5a33be575_0_0.jpg"
+        "uri": "db://assets/ZM_3DPack/Props/Gate/SM_Gate.fbm/tripo_image_717ef0be-fa0a-4d8b-b1ea-e8b5a33be575_0_0.jpg"
       }
     ],
     "fbx": {
@@ -100,7 +100,7 @@
         "b0ce9590-8613-4998-aa9c-b2e46a8564ca@7d6ab"
       ],
       "materials": [
-        "8376e235-87c7-4210-96aa-42b90283eeea"
+        "08de88d4-648a-449d-937b-2732ceca3ce7"
       ],
       "scenes": [
         "b0ce9590-8613-4998-aa9c-b2e46a8564ca@3e80d"
