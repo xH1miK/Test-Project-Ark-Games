@@ -37,6 +37,12 @@ export interface XZ {
   z: number;
 }
 
+/** What stops a moving circle (the tractor, a ball); ObstacleGrid implements it. */
+export interface CircleBlocker {
+  /** Pushes a circle out of what blocks `mask`; writes the corrected centre to `out`, returns the push distance. */
+  resolveCircle(x: number, z: number, radius: number, mask: number, out: XZ): number;
+}
+
 /** Internal record: one monomorphic class keeps the per-ball hot loop fast. */
 class Obstacle {
   enabled = true;

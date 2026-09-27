@@ -5,9 +5,9 @@
  * Pure TypeScript: no engine imports.
  */
 
-import type { TractorTierConfig } from '../core/Config';
+import type { PusherBox, TractorTierConfig } from '../core/Config';
 import { Blocks } from '../world/ObstacleGrid';
-import type { XZ } from '../world/ObstacleGrid';
+import type { CircleBlocker, XZ } from '../world/ObstacleGrid';
 
 export interface TractorDriveSettings {
   /** Maximum turn rate, degrees/s (reached at top speed; 75% of it when standing). */
@@ -19,12 +19,6 @@ export interface TractorDriveSettings {
   readonly collisionPasses: number;
   /** Longest simulation step, s; longer frames are split so collisions stay tight at low FPS. */
   readonly maxStep: number;
-}
-
-/** What stops the tractor (ObstacleGrid implements it). */
-export interface CircleBlocker {
-  /** Pushes a circle out of what blocks `mask`; writes the corrected centre to `out`, returns the push distance. */
-  resolveCircle(x: number, z: number, radius: number, mask: number, out: XZ): number;
 }
 
 const TWO_PI = Math.PI * 2;
@@ -56,6 +50,11 @@ export class TractorModel {
 
   get bodyRadius(): number {
     return this.tier.bodyRadius;
+  }
+
+  /** Boxes that shove balls aside, in the tractor's axes (the tractor is the balls' BallPusher). */
+  get pusherBoxes(): readonly PusherBox[] {
+    return this.tier.pusher;
   }
 
   /** Centre of the body circle (what collides): bodyOffset ahead of the pivot. */
