@@ -30,3 +30,34 @@ Decision: the example is used as a behaviour/numbers reference only — no code 
 | 23:50 | Copied `ZM_3DPack` into `assets/` with its `.meta` files (per the pack README), art sources into `art-src/`, docs + `CLAUDE.md` into the repo, decoded example data into gitignored `reference/` | AI | — |
 | 23:52 | Installed Funplay Cocos MCP v0.6.4 (pinned tag) into `extensions/`. **Reviewed its code before enabling**: network = GitHub release check only (no auto-install); client configs are written only from a panel button. Computed its per-project port (25720) from its source, pinned it + `full` tool profile in `funplay-cocos-mcp.config.json`, registered server `cocos` in `.mcp.json` | AI | `claude` CLI isn't on PATH, so `.mcp.json` instead of `claude mcp add` |
 | 23:56 | Added `docs/SETUP.md` (reproducible setup), `tools/serve.mjs` + `.claude/launch.json` (preview example / builds), migrated Claude memory to the new project path | AI | — |
+
+## 2026-09-27 (Sun) — MCP check & packaging smoke test (~12:58–13:45)
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 12:58 | Health check `GET :25720/health` failed: editor not running; the session had started with both MCP entries failed | AI → human | Asked the user to open the project; they did |
+| 13:01 | MCP up (Funplay 0.6.4, 105 tools, `full`). Its tools could not be hot-loaded into the running AI session (only the user can reconnect via `/mcp`), so wrote `tools/mcp.mjs` — a 50-line stateless JSON-RPC client — and drove the MCP through it | AI | `get_editor_state` → project path, Cocos 3.8.8, port 25720 |
+| 13:02 | Found that the Funplay panel's One-Click Configure had added a duplicate user-scope server `cocos-test-project-1cb0e7` to `~/.claude.json` and installed its skills into `.claude/skills` | AI | Flagged to the user (duplicate would double the tool list); skills committed |
+| 13:03 | Committed editor-generated metas (first import re-pointed FBX texture paths, dumped the gate's FBX material) | AI | `git diff` reviewed: path fixes + new material UUID only |
+| 13:04 | `create_scene` → `assets/scenes/Main.scene` (camera + light). Disabled the skybox and **cleared its cubemap references**, otherwise disabled-but-referenced cubemaps still get packed | AI | Saved scene has zero `__uuid__` references |
+| 13:05 | Feature Cropping through `Editor.Profile.setProject('engine', …)` — read the real 3.8.8 module schema from the editor first. Kept: base, gfx-webgl, 3d, 2d, ui, audio, tween, legacy-pipeline; deprecated APIs removed | AI | `settings/v2/packages/engine.json` rewritten by the editor; build output `includeModules` matches |
+| 13:08 | **Build without closing the editor**: listed the builder's IPC messages, found internal `add-task` (what the Build panel calls) → `tools/build.mjs` + `build-config/web-mobile.json` | AI | Task queued and built: success in 3 min 53 s (first engine compile) |
+| 13:13 | Splash: the build still embeds the Cocos splash (2 s + 19.6 KB logo). In 3.8.8 removing it needs the account form *Project → Build → Edit Build Project Config*; the builder refuses otherwise | AI → human | Read from the builder's own messages. Not bypassed; left for the user |
+| 13:14 | cocos-pnp: cloned and **reviewed the source**. Concerns: `enableSplash:false` patches the splash out of `settings.json` (bypasses the licence gate above), audio not routed through its loader, pako (+47 KB), base64 inside deflated JSON, unmaintained since 2024-06. Running its prebuilt 561 KB minified bundle was **blocked by the AI permission classifier** (unreviewed third-party code) | AI | Decision: plan's fallback — own packer |
+| 13:16 | Own packer `tools/pack/`: text files → one gzip stream → base64; media → raw base64; loader maps every URL the engine requests (XHR, fetch, script/img/media `src`) to `blob:` URLs of embedded files — engine-agnostic, no Cocos internals patched. Fallback inflate for browsers without `DecompressionStream` written from RFC 1951 | AI | `test-inflate.mjs`: 22 inputs × 9 zlib settings (incl. every build file) byte-identical, 0 failures |
+| 13:23 | Packed empty scene: **579,494 bytes** single HTML | AI | Size report per group (below) |
+| 13:24 | Browser test in the built-in pane over http: engine 3.8.8 boots, scene `Main` loads, only `blob:` requests. Pane can't open `file://` and pauses `requestAnimationFrame` while hidden → not reliable for timing | AI | Console clean |
+| 13:26 | `tools/check-html.mjs`: headless Edge over the DevTools protocol, opens the HTML **from `file://`**, portrait 390×844 + landscape 844×390, asserts zero external requests, no console errors, scene running, saves screenshots | AI | PASS both orientations, 60 fps, 13 requests all `blob:`/self; forced JS-inflate path PASS too (inflate 58 ms vs 25 ms native) |
+| 13:28 | Committed; started engine-variant builds in background (custom pipeline; + particle + animation) to price optional modules | AI | See table below |
+
+Empty-scene single HTML (lean engine, legacy pipeline, splash still on):
+
+| Part | Raw | In HTML (gzip + base64) |
+|---|---|---|
+| Engine `cocos-js/cc.js` | 1,275.5 KB | ≈ 468.5 KB |
+| Internal bundle (builtin effects) | 225.0 KB | ≈ 43.7 KB |
+| Boot (polyfills, SystemJS, index/application) | 24.2 KB | ≈ 11.0 KB |
+| `settings.json` (19.6 KB is the splash logo) | 20.7 KB | ≈ 20.7 KB |
+| Main bundle + game scripts | 4.5 KB | ≈ 2.9 KB |
+| Shell (HTML, CSS, loader, inflate) | — | 17.0 KB |
+| **Total** | 1.55 MB | **0.579 MB** → 4.42 MB headroom under 5 MB |

@@ -13,5 +13,13 @@ How to reproduce the working environment from scratch (Windows 11).
    - Open the project in Cocos Creator → the server starts with the editor. Check: `http://127.0.0.1:25720/health`.
    - Start Claude Code in the project folder and approve the `cocos` server.
    - Reviewed before install: network use is limited to a GitHub release check (no auto-install); it writes client configs only from the panel's "One-Click Configure", which we don't use.
+   - The MCP server lives inside the editor: if Claude Code started while the editor was closed, reconnect `cocos` from `/mcp` (or use `node tools/mcp.mjs <tool> '<json>'`, which talks to the same server over HTTP).
+   - Don't use the panel's One-Click Configure for Claude Code: it adds a second, user-scope copy of the server to `~/.claude.json`.
 4. The 3D pack `ZM_3DPack` is committed under `assets/` with its `.meta` files (UUIDs preserved as the pack README requires).
-5. Art sources live in `art-src/` (GPT-image output, prompts in `art-src/PROMPTS_USED.md`); processed sprites are generated into `assets/` by `tools/`.
+5. Build → single HTML → check (editor open, MCP up):
+   ```bash
+   node tools/build.mjs                        # web-mobile build inside the editor (build-config/web-mobile.json)
+   node tools/pack/pack.mjs                    # build/web-mobile -> dist/ZombieMiner.html + size report
+   node tools/check-html.mjs dist/ZombieMiner.html   # headless Edge from file://, portrait + landscape
+   ```
+6. Art sources live in `art-src/` (GPT-image output, prompts in `art-src/PROMPTS_USED.md`); processed sprites are generated into `assets/` by `tools/`.

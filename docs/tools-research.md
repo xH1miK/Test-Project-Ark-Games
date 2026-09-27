@@ -38,6 +38,22 @@
 `"C:\ProgramData\cocos\editors\Creator\3.8.8\CocosCreator.exe" --project "<proj>" --build "configPath=<proj>\build-config\web-mobile.json"`
 Exit code 36 = success, 32 = bad params, 34 = build error. Config JSON from Build panel **Export**. Fails with EPERM if the editor has the same project open.
 
+## Findings from the smoke test (2026-09-27)
+
+- **Build inside the open editor**: the builder (1.3.9) accepts `Editor.Message.request('builder', 'add-task', options)` — the same call the Build panel makes; `query-tasks-info` gives state/progress. Wrapped in `tools/build.mjs` (via Funplay `execute_javascript`, context `editor`). Options schema: `app.asar.unpacked/builtin/builder/@types/public/options.d.ts` in the Creator install. Missing options are filled with defaults (see `temp/builder/log/*.log`). "Workers failed to exit gracefully / SIGTERM" in the log is benign.
+- Do NOT call `command-build` in a running editor (CLI entry point; may quit the app).
+- **Feature Cropping** lives in `Editor.Profile` project `engine` → `modules.configs.defaultConfig.{cache, includeModules, flags, noDeprecatedFeatures}` + `modules.graphics.pipeline`. `includeModules` holds feature names from `resources/3d/engine/cc.config.json`. Engine compile ~3.5 min, cached per option md5 in `%TEMP%/CocosCreator/3.8.8/builder/engine/`.
+- A disabled skybox still packs its cubemaps if the scene references them — clear `_envmap*` references.
+- **Splash**: removal is gated by the Cocos account (`information` package form, "Edit Build Project Config"); without it the builder forces the default splash (2 s, 19.6 KB logo in `settings.json`). Build option `useSplashScreen`.
+- Funplay One-Click Configure writes a duplicate **user-scope** MCP server into `~/.claude.json` (`cocos-<project>-<hash>`) and installs skills into `.claude/skills`.
+- Funplay `execute_javascript` safety checks reject string literals that look like absolute paths — including `'\n'` and `/` regexes; use `String.fromCharCode(10)` and `startsWith`. Scene context predeclares `cc, Editor, scene, director, args, console`; editor context predeclares `fs`, `path`.
+
+### cocos-pnp code review (not adopted)
+- Packs every file into one JSON map (binaries as base64 inside it) → deflate (pako) → base64 → HTML + 47 KB pako.
+- Loader: SystemJS `createScript` → blob URL, `fetch` override, and `cc.assetManager.downloader.register` for known extensions; `.mp3` etc. not registered → audio goes to the engine's XHR path, which it does not hook.
+- `enableSplash:false` zeroes `splashScreen.totalTime` in the packed `settings.json` — bypasses the editor's licence gate.
+- Optional TinyPNG upload (network, off by default). Last commit 2024-06.
+
 ## Project location
 
 Project names: `a-zA-Z0-9_-` only; build path must have no spaces / non-ASCII. EPERM file-lock issues in `temp/`, `library/` are common on Windows → keep the project **outside OneDrive** at an ASCII path, e.g. `C:\dev\...`. Back up with git/GitHub instead.

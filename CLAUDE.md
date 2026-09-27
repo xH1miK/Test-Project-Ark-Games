@@ -34,16 +34,18 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 - Runtime-loaded assets must live under `assets/resources`.
 
 ## Editor & MCP rules
-- MCP server `cocos` = Funplay Cocos MCP v0.6.4 (`extensions/funplay-cocos-mcp`, gitignored; install steps in `docs/SETUP.md`), `http://127.0.0.1:25720/`, `full` tool profile (`funplay-cocos-mcp.config.json`). It runs inside the editor: if its tools fail, ask the user to open the project in Cocos Creator 3.8.8. Health check: `GET http://127.0.0.1:25720/health`.
+- MCP server `cocos` = Funplay Cocos MCP v0.6.4 (`extensions/funplay-cocos-mcp`, gitignored; install steps in `docs/SETUP.md`), `http://127.0.0.1:25720/`, `full` tool profile (`funplay-cocos-mcp.config.json`). It runs inside the editor: if its tools fail, ask the user to open the project in Cocos Creator 3.8.8. Health check: `GET http://127.0.0.1:25720/health`. If the session started before the editor, its `cocos` tools stay unloaded until the user reconnects in `/mcp` — meanwhile call them with `node tools/mcp.mjs <tool> '<json>'` / `node tools/mcp.mjs js <scene|editor> @file.js`.
 - Change `.scene` / `.prefab` ONLY through the Cocos MCP or the editor. Never hand-edit scene/prefab JSON; never edit or copy `.meta` UUIDs.
 - `git commit` before any batch of scene operations; save the scene through MCP afterwards.
 - A new `.ts` file must be compiled by the editor before its component can be added — wait for the asset refresh.
 - After each feature: run the preview in the browser, check the console, drive the tractor with a scripted autopilot (override the joystick output via JS) through the scenario, take screenshots.
 
 ## Build
-- Web Mobile · Debug off · Source maps off · MD5 cache off · Main bundle compression: Merge All JSON · Feature Cropping: physics and every unused module off · splash off.
-- Pack to a single HTML (tools/), check size (target ≤ 4.8 MB) and that it runs from file:// without network requests.
-- CLI build fails with EPERM while the editor has the project open → use the Build panel or close the editor.
+- `node tools/build.mjs` — web-mobile build inside the open editor (builder `add-task` via MCP) from `build-config/web-mobile.json`: Debug / source maps / MD5 off, Merge All JSON, mangle + inline enums. CLI build only with the editor closed (EPERM otherwise).
+- Feature Cropping (`settings/v2/packages/engine.json`; change through `Editor.Profile`, not by hand while the editor is open): base, gfx-webgl, 3d, 2d, ui, audio, tween, legacy-pipeline. Add a module only when code needs it, then re-measure.
+- `node tools/pack/pack.mjs` → `dist/ZombieMiner.html` + size report (hard limit 5,000,000 bytes, target ≤ 4.8 MB; empty scene = 0.58 MB).
+- `node tools/check-html.mjs dist/ZombieMiner.html` — headless Edge from `file://`, portrait + landscape: zero external requests, no console errors, scene running; screenshots in `dist/shots/`.
+- The Cocos splash is removed only via the user's account form (Project → Build → Edit Build Project Config) + `useSplashScreen: false`. Never patch it out of the build output.
 
 ## Git
 Small focused commits. Private GitHub repo (xH1miK). Never commit build/, library/, temp/, local/, profiles/, reference/.
