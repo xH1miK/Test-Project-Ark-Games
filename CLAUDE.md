@@ -24,6 +24,14 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 - BallField is data-oriented (typed arrays, uniform grid, sleeping balls). BallRenderer draws all balls with one dynamic mesh = one draw call (impostor effect).
 - All tunables in `core/Config.ts`. Systems talk through `core/Events.ts` where practical.
 - Static level layout lives in the scene (built via MCP); dynamic objects are spawned by code.
+- `core/GameRoot.ts` is the composition root: creates the models, injects them into views, runs the frame in a fixed order (input → tractor → balls → bucket → shredder; `lateUpdate`: camera, renderers). Level collision = `StaticBlocker` components under the `Level` node → `ObstacleGrid`.
+- QA hooks: with `?qa` in the URL the models are published on `window.__zm` (`core/QaBridge.ts`) for scenario scripts.
+
+## Code style (the user asked for MVP, OOP, SOLID)
+- **Model** = plain TypeScript without `cc` imports: game state and rules, unit-tested in Node. **View** = Cocos component that only renders/applies state. **Presenter/controller** = wires a model to its views.
+- One responsibility per class; dependencies passed in by the composition root, no hidden singletons (Config and the event bus type are the shared vocabulary).
+- Pure modules use erasable TS only (Node type stripping): no `enum`, `namespace`, parameter properties; `import type` for types; extensionless relative imports.
+- Checks: `node tools/typecheck.mjs` (strict tsc bundled with Cocos) and `node --import ./tools/test/register.mjs --test "tools/test/*.test.mjs"`.
 
 ## Cocos 3.8.8 conventions
 - `import { _decorator, Component, Node, Vec3 } from 'cc'; const { ccclass, property } = _decorator;` with a project-unique `@ccclass('Name')`.
@@ -36,6 +44,8 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 ## Editor & MCP rules
 - MCP server `cocos` = Funplay Cocos MCP v0.6.4 (`extensions/funplay-cocos-mcp`, gitignored; install steps in `docs/SETUP.md`), `http://127.0.0.1:25720/`, `full` tool profile (`funplay-cocos-mcp.config.json`). It runs inside the editor: if its tools fail, ask the user to open the project in Cocos Creator 3.8.8. Health check: `GET http://127.0.0.1:25720/health`. If the session started before the editor, its `cocos` tools stay unloaded until the user reconnects in `/mcp` — meanwhile call them with `node tools/mcp.mjs <tool> '<json>'` / `node tools/mcp.mjs js <scene|editor> @file.js`.
 - Change `.scene` / `.prefab` ONLY through the Cocos MCP or the editor. Never hand-edit scene/prefab JSON; never edit or copy `.meta` UUIDs.
+- **asset-db URLs are case-sensitive, the Windows file system is not.** Use the exact case of existing folders (`db://assets/Materials/...`, capital M — made by the FBX import). A wrong-case URL makes asset-db register the folder twice and re-UUID its files (happened 27.09; fixed by restoring the metas from git and a clean re-import).
+- New assets from code: create in the scene process and serialize with `EditorExtends.serialize`, then `asset-db create-asset`/`save-asset`. For materials strip pipeline macros (`CC_*`) from `_defines` — the serializer bakes the editor's pipeline state into them.
 - `git commit` before any batch of scene operations; save the scene through MCP afterwards.
 - A new `.ts` file must be compiled by the editor before its component can be added — wait for the asset refresh.
 - After each feature: run the preview in the browser, check the console, drive the tractor with a scripted autopilot (override the joystick output via JS) through the scenario, take screenshots.
@@ -47,5 +57,12 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 - `node tools/check-html.mjs dist/ZombieMiner.html` — headless Edge from `file://`, portrait + landscape: zero external requests, no console errors, scene running; screenshots in `dist/shots/`.
 - The Cocos splash is off through the builder option `useSplashScreen: false` (the user unchecked Enable Splash on 27.09). Never patch it out of the build output.
 
+## Art
+- `node tools/art/prepare.mjs [name] [--preview <dir>]` — resize/compress `art-src/` (GPT-image) into `assets/` with sharp (`cd tools/art && npm install` once). Specs live in the script.
+
 ## Git
 Small focused commits. Private GitHub repo (xH1miK). Never commit build/, library/, temp/, local/, profiles/, reference/.
+- One branch per milestone/task from `main`: `<stage>/m<N>-<name>` (e.g. `core/m2-drive`).
+- Merge into `main` only after the milestone is verified: `node tools/merge.mjs` — a `--no-ff` merge commit made without touching the working tree (the editor keeps the project open), then HEAD is on `main`; start the next branch with `git switch -c`.
+- Roll back a milestone with `git revert -m 1 <merge>`; never reset `main` without the user's OK.
+- Push (main and branches) only when the user asks.
