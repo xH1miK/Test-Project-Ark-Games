@@ -68,8 +68,10 @@ const SUPPORTED = 2;
 
 /** A ball that moved less than this share of its diameter in a step counts as still. */
 const STILL_SHARE = 0.02;
-/** Contact normals steeper than this (their y) mean one ball rests on the other. */
+/** Contact normals steeper than this (their y): one ball sits on the other, so the upper one gives way. */
 const STACKED = 0.4;
+/** Contact normals steeper than this hold the upper ball up (a ball wedged between others is supported too). */
+const HOLDS = 0.1;
 /** Closing speed, units/s, above which a hit knocks the struck ball along. */
 const KNOCK_SPEED = 0.7;
 /** Horizontal speed, units/s, above which a ball rides over resting balls instead of shoving them. */
@@ -447,15 +449,16 @@ export class BallField {
               }
             }
 
+            if (ny > HOLDS) flags[j] |= SUPPORTED;
+            else if (ny < -HOLDS) flags[i] |= SUPPORTED;
+
             // Share of the correction ball j takes (i takes the rest), and who may climb.
             let jShare: number;
             let climber = 0; // +1: i rides up onto j, -1: j rides up onto i
             if (ny > STACKED) {
-              // j rests on i: the upper ball gives way, unless it sleeps and the overlap is shallow.
-              flags[j] |= SUPPORTED;
+              // j sits on i: the upper ball gives way, unless it sleeps and the overlap is shallow.
               jShare = !jAwake && depth <= jam ? 0 : 1;
             } else if (ny < -STACKED) {
-              flags[i] |= SUPPORTED;
               jShare = 0;
             } else {
               const jSpeed2 = vx[j] * vx[j] + vz[j] * vz[j];

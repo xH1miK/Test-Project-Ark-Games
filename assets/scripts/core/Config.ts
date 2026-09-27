@@ -181,8 +181,8 @@ export const Config = {
       coverage: 0.78,
       /** Random offset of each lattice point, share of the lattice step. */
       jitter: 0.45,
-      /** Passes that push jittered neighbours apart. */
-      relaxPasses: 40,
+      /** Passes that push jittered neighbours apart (the spacing stops changing after 5-10; the example used 40). */
+      relaxPasses: 10,
       seed: 1,
     },
   },

@@ -69,6 +69,8 @@ export function measure(world) {
   const n = balls.count;
   const tmp = { x: 0, z: 0 };
   let overlap = 0;
+  let contacts = 0;
+  let deep = 0;
   let wall = 0;
   let inPusher = 0;
   let outside = 0;
@@ -111,8 +113,13 @@ export function measure(world) {
         if (j <= i) continue;
         const d = Math.hypot(balls.x[j] - balls.x[i], balls.y[j] - balls.y[i], balls.z[j] - balls.z[i]);
         overlap = Math.max(overlap, 2 * r - d);
+        if (d < 2 * r) contacts++;
+        if (d < 2 * r - DEEP) deep++;
       }
     }
   }
-  return { overlap, wall, inPusher: Math.max(0, inPusher), outside, nan, above };
+  return { overlap, contacts, deep, wall, inPusher: Math.max(0, inPusher), outside, nan, above };
 }
+
+/** Ball-ball overlap that counts as deep (visible interpenetration), units. */
+export const DEEP = 0.1;

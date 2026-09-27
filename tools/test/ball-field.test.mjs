@@ -216,27 +216,38 @@ test('field edges hold, including the kerb corner', () => {
 
 // --- the real arena ---
 
+/** Drives the carpet route; the state is measured every 6th frame. Deep = overlaps over DEEP, share of all contacts. */
 const driveThrough = (fps, tier, seconds) => {
   const world = makeWorld({ tier });
   const steer = autopilot(CARPET_ROUTE);
-  let worst = { overlap: 0, wall: 0, inPusher: 0, outside: 0, nan: 0 };
+  const worst = { overlap: 0, wall: 0, inPusher: 0, outside: 0, nan: 0 };
+  let contacts = 0;
+  let deep = 0;
   for (let f = 0, stick = steer(world.tractor); stick && f < seconds * fps; f++, stick = steer(world.tractor)) {
     frame(world, 1 / fps, stick.x, stick.z);
     if (f % 6 === 0) {
       const m = measure(world);
       for (const k of Object.keys(worst)) worst[k] = Math.max(worst[k], m[k]);
+      contacts += m.contacts;
+      deep += m.deep;
     }
   }
-  return { world, worst };
+  return { world, worst, deepShare: deep / Math.max(1, contacts) };
 };
 
+// Pushing a berm is not a converged solve: rare single-frame spikes stay under 0.3 (half a diameter
+// would read as one ball inside another), deep overlaps stay a tiny share of the contacts.
+const SPIKE = 0.3;
+const DEEP_SHARE = 0.005;
+
 test('tractor T1 drives through the carpet: walls, edges and state hold; the carpet sleeps once it stops', () => {
-  const { world, worst } = driveThrough(60, 0, 12);
+  const { world, worst, deepShare } = driveThrough(60, 0, 12);
   assert.ok(world.tractor.odometer > 30, `odometer ${world.tractor.odometer}`);
   assert.equal(worst.nan, 0);
   assert.equal(worst.outside, 0);
   assert.ok(worst.wall < 1e-9, `in walls ${worst.wall}`);
-  assert.ok(worst.overlap < 0.25, `overlap while pushing ${worst.overlap}`);
+  assert.ok(worst.overlap < SPIKE, `overlap while pushing ${worst.overlap}`);
+  assert.ok(deepShare < DEEP_SHARE, `deep overlaps ${(deepShare * 100).toFixed(2)}% of contacts`);
   let asleep = false;
   for (let f = 0; f < 180 && !asleep; f++) {
     frame(world, 1 / 60, 0, 0);
@@ -250,19 +261,21 @@ test('tractor T1 drives through the carpet: walls, edges and state hold; the car
 });
 
 test('low frame rate (8 fps, split into 1/30 s steps) keeps the same guarantees', () => {
-  const { worst } = driveThrough(8, 0, 8);
+  const { worst, deepShare } = driveThrough(8, 0, 8);
   assert.equal(worst.nan, 0);
   assert.equal(worst.outside, 0);
   assert.ok(worst.wall < 1e-9, `in walls ${worst.wall}`);
-  assert.ok(worst.overlap < 0.3, `overlap ${worst.overlap}`);
+  assert.ok(worst.overlap < SPIKE, `overlap ${worst.overlap}`);
+  assert.ok(deepShare < DEEP_SHARE, `deep overlaps ${(deepShare * 100).toFixed(2)}% of contacts`);
 });
 
 test('tractor T2 (bigger, 8.4 u/s) through the carpet: walls and edges hold', () => {
-  const { worst } = driveThrough(60, 1, 6);
+  const { worst, deepShare } = driveThrough(60, 1, 6);
   assert.equal(worst.nan, 0);
   assert.equal(worst.outside, 0);
   assert.ok(worst.wall < 1e-9, `in walls ${worst.wall}`);
-  assert.ok(worst.overlap < 0.3, `overlap ${worst.overlap}`);
+  assert.ok(worst.overlap < SPIKE, `overlap ${worst.overlap}`);
+  assert.ok(deepShare < DEEP_SHARE, `deep overlaps ${(deepShare * 100).toFixed(2)}% of contacts`);
 });
 
 test('tier boxes: body front and bucket back are the shared (shut) faces', () => {
