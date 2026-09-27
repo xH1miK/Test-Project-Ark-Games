@@ -62,12 +62,49 @@ export const CARPET_ROUTE = [
   [12, -6], [11, 10], [-1, 12], [-2, -6], [3, 2], [12, 4], [8, 14], [0, 6], [9, -8],
 ];
 
-/** Worst overlaps and escapes of the current state (for checks). */
+/**
+ * Where a ball centre can be inside the arena: a flood fill from the tractor start over the positions
+ * where a ball touches no rock (the rocks close the arena; the field edges are only a safety net).
+ * Returns inArena(x, z).
+ */
+export function arenaMask(grid, radius, step = 0.1) {
+  const { minX, maxX, minZ, maxZ } = grid.bounds;
+  const cols = Math.round((maxX - minX) / step);
+  const rows = Math.round((maxZ - minZ) / step);
+  const seen = new Uint8Array(cols * rows);
+  const start = LEVEL.spots.tractorStart;
+  const queue = [Math.floor((start.x - minX) / step) + Math.floor((start.z - minZ) / step) * cols];
+  seen[queue[0]] = 1;
+  while (queue.length) {
+    const i = queue.pop();
+    const c = i % cols;
+    const k = (i - c) / cols;
+    for (const [dc, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nc = c + dc;
+      const nk = k + dk;
+      const j = nc + nk * cols;
+      if (nc < 0 || nk < 0 || nc >= cols || nk >= rows || seen[j]) continue;
+      if (grid.overlapsCircle(minX + nc * step, minZ + nk * step, radius, Blocks.Balls)) continue;
+      seen[j] = 1;
+      queue.push(j);
+    }
+  }
+  // A ball touching a rock sits between samples: inside when any of the 4 samples around it is.
+  return (x, z) => {
+    const c = Math.floor((x - minX) / step);
+    const k = Math.floor((z - minZ) / step);
+    if (c < 0 || k < 0 || c >= cols - 1 || k >= rows - 1) return false;
+    return !!(seen[c + k * cols] | seen[c + 1 + k * cols] | seen[c + (k + 1) * cols] | seen[c + 1 + (k + 1) * cols]);
+  };
+}
+
+/** Worst overlaps and escapes of the current state (for checks). `outside` = left the arena or sank under the floor. */
 export function measure(world) {
   const { balls, grid, tractor, settings } = world;
   const r = settings.radius;
   const n = balls.count;
   const tmp = { x: 0, z: 0 };
+  world.inArena ??= arenaMask(grid, r);
   let overlap = 0;
   let contacts = 0;
   let deep = 0;
@@ -76,13 +113,12 @@ export function measure(world) {
   let outside = 0;
   let nan = 0;
   let above = 0;
-  const b = settings.bounds;
   const cos = Math.cos(tractor.yaw);
   const sin = Math.sin(tractor.yaw);
   for (let i = 0; i < n; i++) {
     const x = balls.x[i], y = balls.y[i], z = balls.z[i];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) nan++;
-    if (x < b.minX + r - 1e-9 || x > b.maxX - r + 1e-9 || z < b.minZ + r - 1e-9 || z > b.maxZ - r + 1e-9 || y < r - 1e-9) outside++;
+    if (!world.inArena(x, z) || y < r - 1e-9) outside++;
     wall = Math.max(wall, grid.resolveCircle(x, z, r, Blocks.Balls, tmp));
     above = Math.max(above, y);
     // Depth inside the tractor's boxes (pusher axes).
@@ -98,7 +134,7 @@ export function measure(world) {
     }
   }
   // Ball-ball overlap through a simple grid.
-  const cell = 2 * r, cols = Math.ceil((b.maxX - b.minX) / cell), rows = Math.ceil((b.maxZ - b.minZ) / cell);
+  const b = settings.bounds, cell = 2 * r, cols = Math.ceil((b.maxX - b.minX) / cell), rows = Math.ceil((b.maxZ - b.minZ) / cell);
   const buckets = new Map();
   for (let i = 0; i < n; i++) {
     const key = Math.floor((balls.x[i] - b.minX) / cell) + Math.floor((balls.z[i] - b.minZ) / cell) * cols;

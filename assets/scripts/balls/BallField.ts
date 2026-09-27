@@ -82,6 +82,8 @@ const MAX_LIFT_SPEED = 0.5;
 const HOP_SHARE = 0.25;
 /** A pusher that jumps farther than this in one step was teleported: no speed is derived from the jump. */
 const TELEPORT = 3;
+/** Most push-out passes against the static obstacles per constraint (pockets between rotated rocks). */
+const OBSTACLE_PASSES = 4;
 
 export class BallField {
   /** Ball centres, world units (views read them). */
@@ -502,7 +504,10 @@ export class BallField {
     this.pairChecks += pairs;
   }
 
-  /** The hard limits of one ball, in order of authority: floor, pusher, static obstacles, field edges. */
+  /**
+   * The hard limits of one ball, the last word last: floor, pusher, field edges, then the static
+   * obstacles (a ball sunk in a rock would show; the edges are only a safety net behind the rocks).
+   */
   private constrain(i: number, pusher: BallPusher | null, first: boolean, dt: number): void {
     const { x, y, z } = this;
     const r = this.radius;
@@ -511,13 +516,15 @@ export class BallField {
       this.flags[i] |= ON_FLOOR | SUPPORTED;
     }
     if (pusher) this.shove(i, pusher.pusherBoxes, first, dt);
-    if (this.blocker.resolveCircle(x[i], z[i], r, Blocks.Balls, this.resolved) > 0) {
-      x[i] = this.resolved.x;
-      z[i] = this.resolved.z;
-    }
     const { bounds } = this.settings;
     x[i] = clamp(x[i], bounds.minX + r, bounds.maxX - r);
     z[i] = clamp(z[i], bounds.minZ + r, bounds.maxZ - r);
+    // Pushed out of one rock into its neighbour in a sharp pocket: go round again (each pass halves the rest).
+    for (let pass = 0; pass < OBSTACLE_PASSES; pass++) {
+      if (this.blocker.resolveCircle(x[i], z[i], r, Blocks.Balls, this.resolved) <= 0) break;
+      x[i] = this.resolved.x;
+      z[i] = this.resolved.z;
+    }
   }
 
   /**

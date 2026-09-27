@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Config, PusherFace } from '../../assets/scripts/core/Config.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
-import { layCarpet } from '../../assets/scripts/balls/BallCarpet.ts';
+import { layCarpet, mulberry32 } from '../../assets/scripts/balls/BallCarpet.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
 import { CARPET_ROUTE, LEVEL, arenaGrid, autopilot, frame, makeWorld, measure } from './ball-world.mjs';
 
@@ -229,6 +229,30 @@ test('walls hold: balls rammed into a wall by the pusher never end a step inside
   assert.equal(balls.count, 36);
 });
 
+test('walls hold in a sharp pocket between two rotated walls (balls rammed into the apex)', () => {
+  // A 62° V opening toward -Z: left wall (-3, 2)..(0, 7), right wall (3, 2)..(0, 7).
+  const half = Math.hypot(3, 5) / 2;
+  const left = { kind: 'box', x: -1.5, z: 4.5, halfX: half, halfZ: 0.3, angle: -Math.atan2(5, 3) };
+  const right = { kind: 'box', x: 1.5, z: 4.5, halfX: half, halfZ: 0.3, angle: Math.atan2(5, 3) };
+  const { balls, grid } = openField([left, right]);
+  for (let row = 0; row < 7; row++) {
+    for (let k = -5; k <= 5; k++) {
+      const x = k * D * 1.02;
+      const z = 1 + row * D * 0.95;
+      if (!grid.overlapsCircle(x, z, R, Blocks.Balls) && Math.abs(x) < 3 - (z - 2) * 0.6) balls.add(x, R, z);
+    }
+  }
+  const narrow = [{ halfX: 0.6, minZ: -0.5, maxZ: 0.5, top: 1.3, shut: 0 }];
+  const tmp = { x: 0, z: 0 };
+  let worst = 0;
+  for (let k = 0; k < 240; k++) {
+    // Ram forward and wiggle, at a low frame rate: big steps are the hard case.
+    balls.step(1 / 30, pusherAt(Math.sin(k / 9) * 0.4, -1 + Math.min(6, k * 0.06), 0, narrow));
+    for (let i = 0; i < balls.count; i++) worst = Math.max(worst, grid.resolveCircle(balls.x[i], balls.z[i], R, Blocks.Balls, tmp));
+  }
+  assert.ok(worst < 1e-9, `deepest ball in a wall ${worst}`);
+});
+
 test('field edges hold, including the kerb corner', () => {
   const bounds = { minX: -3, maxX: 3, minZ: -3, maxZ: 3 };
   const { balls } = openField([], { bounds });
@@ -304,6 +328,24 @@ test('tractor T2 (bigger, 8.4 u/s) through the carpet: walls and edges hold', ()
   assert.ok(worst.wall < 1e-9, `in walls ${worst.wall}`);
   assert.ok(worst.overlap < SPIKE, `overlap ${worst.overlap}`);
   assert.ok(deepShare < DEEP_SHARE, `deep overlaps ${(deepShare * 100).toFixed(2)}% of contacts`);
+});
+
+test('T2 along the walls at a jittery low frame rate rams balls into the corners: none ends in a rock or leaves the arena', () => {
+  // Found by a stress run: the field-edge clamp used to come after the rocks and put a corner ball back into a rock.
+  const world = makeWorld({ tier: 1 });
+  const random = mulberry32(4);
+  const steer = autopilot([[13, 17], [-4, 17], [-4, -11], [13, -11], [13, 16]]);
+  const tmp = { x: 0, z: 0 };
+  let inRock = 0;
+  let outside = 0;
+  for (let f = 0, stick = steer(world.tractor); stick && f < 1500; f++, stick = steer(world.tractor)) {
+    frame(world, Math.min(0.25, 1 / 60 + random() * random() * 0.3), stick.x, stick.z);
+    const { balls, grid } = world;
+    for (let i = 0; i < balls.count; i++) if (grid.resolveCircle(balls.x[i], balls.z[i], R, Blocks.Balls, tmp) > 1e-9) inRock++;
+    outside = Math.max(outside, measure(world).outside);
+  }
+  assert.equal(inRock, 0, 'ball-frames inside a rock');
+  assert.equal(outside, 0, 'balls outside the arena');
 });
 
 test('tier boxes: body front and bucket back are the shared (shut) faces', () => {
