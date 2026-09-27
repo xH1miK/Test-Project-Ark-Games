@@ -1,0 +1,9 @@
+{
+  "name": "zm-art-tools",
+  "private": true,
+  "type": "module",
+  "description": "Resize and compress source art (art-src/) into game assets",
+  "dependencies": {
+    "sharp": "0.35.5"
+  }
+}
