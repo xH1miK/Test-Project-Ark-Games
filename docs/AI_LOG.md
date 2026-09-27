@@ -147,3 +147,12 @@ User review of the M2 screenshots: the joystick knob is fine, the ring is far to
 | 18:00 | Asked for a thin joystick ring | human | — |
 | 18:02 | Kept the GPT-image ring instead of drawing a new one: `prepare.mjs` got a `ring` step that squeezes the band radially toward the outer edge (0.33 → 0.12 of the radius), sampling along the same angle with premultiplied bilinear filtering, so the gloss, both outlines and the glow stay; `--set`/`--out` to try variants without touching assets | AI | Comparison sheet of 0.08 / 0.12 / 0.16 against the old ring on crops of a real game frame, idle and held; 0.12 chosen (0.08 fades out at idle opacity) |
 | 18:05 | Re-imported the PNG through an exact-file `refresh-asset` (UUID and meta unchanged) → build → pack → check | AI | PASS portrait + landscape from `file://`; `drive` scenario green on GPU (60 fps); HTML 2.593 MB (ring PNG 31 → 19 KB) |
+
+## 2026-09-27 (Sun) — Push, M3 groundwork (~18:12–18:28)
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 18:12 | The app header showed "+16,812 −60" on the M3 branch; user asked why so much. It is lines, not files: the diff against GitHub's `main` (last push 13:58, before M1) — 26 commits, 76 files, 12,774 of the lines are `Main.scene` JSON | human → AI | `git diff --shortstat origin/main`; 163 tracked files in total, no build output or node_modules in git |
+| 18:19 | Pushed `main` and the milestone branches (M1, M1 look, M2, M2 ring, M3) | AI (on user's request) | Reviewed the file list and grepped the diff for secrets first; header down to the M3 handoff commit |
+| 18:22 | M3 groundwork: `tools/scenarios/dump-level.mjs` writes the arena's 32 obstacles and key spots from the running game to `tools/test/fixtures/level.json` (tests and the benchmark will run on the real level); measured Tractor1's body and bucket boxes for the ball pusher; read the example's carpet holes (they sit on our spots) | AI | Fixture spot-checked (shredder and gate-house boxes match the scene) |
+| 18:27 | User: do M3 in a new chat. Dropped an unfinished refactor file, put the measurements into the M3 handoff prompt | human → AI | Branch clean |
