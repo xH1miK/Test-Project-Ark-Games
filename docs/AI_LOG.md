@@ -61,3 +61,13 @@ Empty-scene single HTML (lean engine, legacy pipeline, splash still on):
 | Main bundle + game scripts | 4.5 KB | ≈ 2.9 KB |
 | Shell (HTML, CSS, loader, inflate) | — | 17.0 KB |
 | **Total** | 1.55 MB | **0.579 MB** → 4.42 MB headroom under 5 MB |
+
+Engine variants (13:28–13:38, built and packed by a script through the same MCP path; each HTML checked from `file://`):
+
+| Variant | `cc.js` raw | `cc.js` gzip | Single HTML | vs lean | Build |
+|---|---|---|---|---|---|
+| **lean, legacy pipeline** (chosen) | 1,306,116 | 359,497 | **579,494** | — | 3 min 53 s cold / 1 min 33 s cached |
+| custom pipeline (3.8.8 default) | 1,399,680 | 379,844 | 628,485 | +49 KB | 3 min 50 s |
+| legacy + particle + animation | 1,504,577 | 410,291 | 671,594 | +92 KB | 4 min 20 s |
+
+Decisions: keep the legacy pipeline (−49 KB, both render). The 3D ParticleSystem + animation cost +92 KB — affordable, decided at the juice stage (own pooled FX vs ParticleSystem). The final lean rebuild was **byte-identical** to the first one → builds are deterministic and the settings were restored exactly.
