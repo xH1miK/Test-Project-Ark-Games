@@ -3,6 +3,8 @@ import { Config } from './Config';
 import { EventBus } from './Events';
 import type { GameEvents } from './Events';
 import { exposeForQa } from './QaBridge';
+import { layCarpet } from '../balls/BallCarpet';
+import { BallField } from '../balls/BallField';
 import { CameraRigModel } from '../camera/CameraRigModel';
 import { CameraRigView } from '../camera/CameraRigView';
 import { JoystickModel } from '../input/JoystickModel';
@@ -19,8 +21,9 @@ const tmpForward = new Vec3();
 
 /**
  * Composition root: creates the models, wires them to the scene's views and drives the frame in a
- * fixed order (update: input -> tractor; lateUpdate: views and camera). The only place that knows
- * every system (Unity analogy: a bootstrap MonoBehaviour).
+ * fixed order (update: input, then tractor -> balls in steps of at most Config.time.maxStep;
+ * lateUpdate: views and camera). The only place that knows every system (Unity analogy: a
+ * bootstrap MonoBehaviour).
  */
 @ccclass('GameRoot')
 export class GameRoot extends Component {
@@ -44,6 +47,7 @@ export class GameRoot extends Component {
   private joystick!: JoystickModel;
   private moveInput!: MoveInput;
   private tractor!: TractorModel;
+  private balls!: BallField;
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
@@ -60,6 +64,11 @@ export class GameRoot extends Component {
     Vec3.transformQuat(tmpForward, Vec3.UNIT_Z, startSpot.worldRotation);
     this.tractor.place(startSpot.worldPosition.x, startSpot.worldPosition.z, Math.atan2(tmpForward.x, tmpForward.z));
 
+    const { radius, maxCount, carpet } = Config.balls;
+    const centres = layCarpet(carpet, radius, maxCount, this.obstacles);
+    this.balls = new BallField(Config.balls, centres.length / 2, this.obstacles);
+    for (let k = 0; k < centres.length; k += 2) this.balls.add(centres[k], radius, centres[k + 1]);
+
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
     this.events.on('tierChanged', ({ tier }) =>
@@ -70,20 +79,29 @@ export class GameRoot extends Component {
     cameraView.render(this.camera);
 
     exposeForQa({
+      config: Config,
       obstacles: this.obstacles,
       events: this.events,
       joystick: this.joystick,
       input: this.moveInput,
       tractor: this.tractor,
+      balls: this.balls,
       camera: this.camera,
     });
   }
 
   protected update(dt: number): void {
-    const step = Math.min(dt, Config.time.maxFrameDt);
-    this.joystick.update(step);
+    const frame = Math.min(dt, Config.time.maxFrameDt);
+    if (frame <= 0) return;
+    this.joystick.update(frame);
     this.moveInput.setFromStick(this.joystick.stick.x, this.joystick.stick.y, this.camera.yaw);
-    this.tractor.update(step, this.moveInput.x, this.moveInput.z);
+    // A slow frame runs in several short steps: the balls must see the tractor move a little at a time.
+    const steps = Math.ceil(frame / Config.time.maxStep - 1e-9);
+    const step = frame / steps;
+    for (let i = 0; i < steps; i++) {
+      this.tractor.update(step, this.moveInput.x, this.moveInput.z);
+      this.balls.step(step, this.tractor);
+    }
   }
 
   protected lateUpdate(dt: number): void {
@@ -92,5 +110,7 @@ export class GameRoot extends Component {
     this.camera.update(step, this.tractor.x, 0, this.tractor.z);
     this.cameraView!.render(this.camera);
     this.joystickView!.render();
+    // Views have drawn this frame's moved balls (no ball view yet: the renderer comes with M4).
+    this.balls.clearMoved();
   }
 }

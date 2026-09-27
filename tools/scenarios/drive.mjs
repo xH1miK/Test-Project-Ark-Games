@@ -7,55 +7,22 @@
 //
 //   node tools/check-html.mjs <html|url> --scenario drive [--gpu]
 
+import { gameWait as waitGame, installAutopilot, runLegs } from './lib/autopilot.mjs';
+
 const MAX_PENETRATION = 0.05;
 
-/** In-page autopilot and per-frame probes, installed once per page load. */
-const INSTALL = `(() => {
-  if (window.__ap) return 'already';
-  const zm = window.__zm, tmp = { x: 0, z: 0 };
-  const ap = window.__ap = { legs: [], i: 0, t: 0, clock: 0, running: false, results: [], worst: 0, worstAt: null,
-    legWorst: 0, nan: false, box: { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity } };
-  const begin = () => {
-    const leg = ap.legs[ap.i];
-    if (leg) { leg.fromX = zm.tractor.x; leg.fromZ = zm.tractor.z; leg.odo0 = zm.tractor.odometer; }
-  };
-  const finish = (ok, reason) => {
-    const leg = ap.legs[ap.i], tr = zm.tractor;
-    ap.results.push({ name: leg.name, ok, reason, x: +tr.x.toFixed(2), z: +tr.z.toFixed(2), t: +ap.t.toFixed(2),
-      moved: +(tr.odometer - leg.odo0).toFixed(2), worst: +ap.legWorst.toFixed(4) });
-    ap.i++; ap.t = 0; ap.legWorst = 0;
-    if (ap.i >= ap.legs.length) { ap.running = false; zm.input.release(); } else begin();
-  };
-  ap.run = (legs) => { ap.legs = legs; ap.i = 0; ap.t = 0; ap.results = []; ap.legWorst = 0; ap.running = true; begin(); };
-  cc.director.on(cc.Director.EVENT_BEFORE_UPDATE, () => {
-    if (!ap.running) return;
-    const leg = ap.legs[ap.i], tr = zm.tractor, radius = leg.radius || 1;
-    if (leg.kind === 'goto') {
-      const dx = leg.x - tr.x, dz = leg.z - tr.z, dist = Math.hypot(dx, dz);
-      // At low FPS the tractor may step over the waypoint: done once it is behind.
-      const passed = dx * (leg.x - leg.fromX) + dz * (leg.z - leg.fromZ) <= 0;
-      if (dist <= radius) return finish(true, 'reached');
-      if (passed) return finish(true, 'passed');
-      zm.input.override(dx / dist, dz / dist);
-    } else if (leg.kind === 'push') {
-      if (ap.t >= leg.time) return finish(true, 'time');
-      zm.input.override(leg.dx, leg.dz);
-    } else if (leg.kind === 'stop') {
-      zm.input.override(0, 0);
-      if (ap.t >= leg.time && tr.speed === 0) return finish(true, 'stopped');
-    }
-    if (ap.t > (leg.timeout || 20)) finish(false, 'timeout');
-  });
+/** Per-frame probes of the tractor (after the autopilot): penetration into obstacles, NaN, where it went. */
+const PROBES = `(() => {
+  if (window.__driveProbe) return 'already';
+  const zm = window.__zm, ap = window.__ap, tmp = { x: 0, z: 0 };
+  const probe = window.__driveProbe = { worst: 0, worstAt: null, nan: false, box: { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity } };
   cc.director.on(cc.Director.EVENT_AFTER_UPDATE, () => {
-    const dt = Math.min(cc.game.deltaTime, 0.25); // the clamp GameRoot applies (Config.time.maxFrameDt)
-    ap.clock += dt;
-    if (ap.running) ap.t += dt;
     const tr = zm.tractor;
-    if (!Number.isFinite(tr.x) || !Number.isFinite(tr.z) || !Number.isFinite(tr.yaw)) ap.nan = true;
+    if (!Number.isFinite(tr.x) || !Number.isFinite(tr.z) || !Number.isFinite(tr.yaw)) probe.nan = true;
     const pen = zm.obstacles.resolveCircle(tr.bodyX, tr.bodyZ, tr.bodyRadius, 1, tmp); // 1 = Blocks.Tractor
-    if (pen > ap.worst) { ap.worst = pen; ap.worstAt = { x: +tr.x.toFixed(3), z: +tr.z.toFixed(3), leg: ap.running ? ap.legs[ap.i].name : '-' }; }
+    if (pen > probe.worst) { probe.worst = pen; probe.worstAt = { x: +tr.x.toFixed(3), z: +tr.z.toFixed(3), leg: ap.running ? ap.legs[ap.i].name : '-' }; }
     if (pen > ap.legWorst) ap.legWorst = pen;
-    const b = ap.box;
+    const b = probe.box;
     b.minX = Math.min(b.minX, tr.x); b.maxX = Math.max(b.maxX, tr.x); b.minZ = Math.min(b.minZ, tr.z); b.maxZ = Math.max(b.maxZ, tr.z);
   });
   return 'installed';
@@ -98,20 +65,10 @@ const RAM_CORNER = [
 
 export default async function drive(t) {
   await t.waitFor('window.__zm && window.__zm.tractor');
-  await t.evaluate(INSTALL);
-  const run = async (label, legs) => {
-    await t.evaluate(`__ap.run(${JSON.stringify(legs)})`);
-    await t.waitFor('!__ap.running', 180000);
-    const results = await t.evaluate('__ap.results');
-    for (const r of results) t.log(`${label} | ${r.name}: ${r.reason} at (${r.x}, ${r.z}) in ${r.t}s, moved ${r.moved}, max pen ${r.worst}`);
-    t.check(results.every((r) => r.ok), `${label}: every leg finished (${results.filter((r) => r.ok).length}/${legs.length})`);
-    return results;
-  };
-  /** Waits for `seconds` of game time (the clock advances by the clamped frame time). */
-  const gameWait = async (seconds) => {
-    const until = (await t.evaluate('__ap.clock')) + seconds;
-    await t.waitFor(`__ap.clock >= ${until}`, 120000);
-  };
+  await installAutopilot(t);
+  await t.evaluate(PROBES);
+  const run = (label, legs) => runLegs(t, label, legs);
+  const gameWait = (seconds) => waitGame(t, seconds);
 
   // Start: the joystick rests bottom-centre, the tractor sits on TractorStart.
   const start = await t.evaluate(`(() => { const s = cc.find('Level/Spots/TractorStart').worldPosition, tr = __zm.tractor;
@@ -145,7 +102,7 @@ export default async function drive(t) {
   await run('shredder', RAM_SHREDDER);
   await t.shot('shredder');
   const corner = await run('corner', RAM_CORNER);
-  const probe = await t.evaluate('({ worst: __ap.worst, at: __ap.worstAt, nan: __ap.nan, box: __ap.box })');
+  const probe = await t.evaluate('({ worst: __driveProbe.worst, at: __driveProbe.worstAt, nan: __driveProbe.nan, box: __driveProbe.box })');
   t.log(`max penetration ${probe.worst.toFixed(4)} at ${JSON.stringify(probe.at)}; tractor stayed in x ${probe.box.minX.toFixed(2)}..${probe.box.maxX.toFixed(2)}, z ${probe.box.minZ.toFixed(2)}..${probe.box.maxZ.toFixed(2)}`);
   t.check(probe.worst <= MAX_PENETRATION, `penetration into obstacles never above ${MAX_PENETRATION} (max ${probe.worst.toFixed(4)})`);
   t.check(!probe.nan, 'no NaN in the tractor state');

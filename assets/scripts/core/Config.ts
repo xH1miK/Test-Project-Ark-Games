@@ -4,6 +4,23 @@
  * Tune numbers here, never inside components.
  */
 
+/** Faces of a PusherBox, as bits of PusherBox.shut. */
+export const PusherFace = { Left: 1, Right: 2, Back: 4, Front: 8 } as const;
+
+/**
+ * A solid box of something that shoves balls (the tractor), in its local axes: x to the side,
+ * z forward, y up from the ground. Balls are pushed out sideways (in XZ), never onto its top.
+ */
+export interface PusherBox {
+  readonly halfX: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+  /** Height of the top; a ball whose bottom is above it is left alone. */
+  readonly top: number;
+  /** Faces a ball is never pushed out through, because another box of the pusher is there (PusherFace bits). */
+  readonly shut: number;
+}
+
 /** Stats of one tractor tier. Tier 1 is index 0. */
 export interface TractorTierConfig {
   /** Top speed, units/s. */
@@ -17,7 +34,12 @@ export interface TractorTierConfig {
    * tracks; the circle is centred over the whole machine, bucket included, so the bucket stops at a wall.
    */
   readonly bodyOffset: number;
+  /** Boxes that shove balls aside, in the tractor's axes (pivot at the origin, +Z forward). */
+  readonly pusher: readonly PusherBox[];
 }
+
+/** Longest simulation step, s: slower frames are split into several steps (tractor and balls). */
+const MAX_STEP = 1 / 30;
 
 export interface XZBounds {
   readonly minX: number;
@@ -30,6 +52,8 @@ export const Config = {
   time: {
     /** Longest frame the simulation accepts, s; after a hitch the game slows down instead of jumping. */
     maxFrameDt: 0.25,
+    /** Longest step of the frame loop, s: a slower frame runs tractor and balls in several steps. */
+    maxStep: MAX_STEP,
   },
 
   world: {
@@ -42,9 +66,22 @@ export const Config = {
   tractor: {
     tiers: [
       // Tractor1 spans z -0.77..1.88 around its pivot (bucket in front), half width 0.85.
-      { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55 },
-      // Tractor2: bodyOffset to be measured when its model goes in (progression stage).
-      { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0 },
+      {
+        speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55,
+        pusher: [
+          { halfX: 0.85, minZ: -0.77, maxZ: 1.03, top: 1.3, shut: PusherFace.Front }, // body
+          // Bucket: solid like a full bucket; the scoop (M5) turns it into an intake.
+          { halfX: 0.74, minZ: 1.03, maxZ: 1.88, top: 0.75, shut: PusherFace.Back },
+        ],
+      },
+      // Tractor2 (sizes from the example): bodyOffset to be measured when its model goes in (progression stage).
+      {
+        speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0,
+        pusher: [
+          { halfX: 1.5, minZ: -1.37, maxZ: 1.82, top: 3, shut: PusherFace.Front },
+          { halfX: 1.7, minZ: 1.82, maxZ: 3.07, top: 1.4, shut: PusherFace.Back },
+        ],
+      },
     ] as readonly TractorTierConfig[],
     /** Maximum turn rate, degrees/s. */
     turnSpeed: 240,
@@ -57,7 +94,7 @@ export const Config = {
      */
     collisionPasses: 4,
     /** Longest movement step, s; slower frames are split into several steps. */
-    maxStep: 1 / 30,
+    maxStep: MAX_STEP,
   },
 
   camera: {
@@ -90,8 +127,64 @@ export const Config = {
 
   balls: {
     radius: 0.275,
-    /** Balls spawned on the field at start; there is no respawn. */
-    count: 1500,
+    /** Most balls on the field (the carpet is thinned out to it). Laid once at start, no respawn. */
+    maxCount: 1600,
+
+    // Motion (numbers from the example).
+    /** Units/s². */
+    gravity: 28,
+    /** Share of a fall that bounces back off the floor, 0..1. */
+    restitution: 0.1,
+    /** Constant braking on the ground, units/s²: a ball shoved at 3 u/s stops within a diameter. */
+    groundFriction: 16,
+    /** Share of horizontal speed lost per second on the ground (on top of the friction) and in the air. */
+    groundDrag: 1,
+    airDrag: 0.71,
+    /** How readily a ball shoved into a resting one rides up onto it (0 = flat row, 0.35 = a berm heaps up). */
+    climb: 0.35,
+    /** Share of the closing speed a struck ball receives, so a hit knocks the next ball along. */
+    knock: 0.25,
+    /** Extra speed a ball is thrown off the pusher with, units/s, and the sideways share at its front. */
+    pushSpeed: 3,
+    plough: 1,
+
+    /** Edges of the field: the rock faces of the arena, a safety net behind the rocks themselves. */
+    bounds: { minX: -6.3, maxX: 15.8, minZ: -22.5, maxZ: 19.8 } as XZBounds,
+    /** Kerb along the edges: a moving ball within `edgeBand` is pushed back at up to `edgePush` units/s². */
+    edgeBand: 2.5,
+    edgePush: 3,
+
+    // Solver.
+    /** Contact passes per step (3 keeps berm overlaps over 0.1 three times rarer than 2, for +40% time). */
+    iterations: 3,
+    /** Share of the diameter two balls may overlap without being pushed apart (keeps piles calm). */
+    contactSlop: 0.02,
+    /** Share of the diameter a resting ball lets a slow neighbour sink in before it gives way. */
+    jamDepth: 0.12,
+    /** Below this speed, units/s, a supported ball stops. */
+    restSpeed: 0.35,
+    /** Steps a disturbed cell stays awake; balls in cold cells sleep and cost nothing. */
+    hotFrames: 4,
+
+    /** The carpet laid at start (world XZ, from the example; the holes sit on our spots). */
+    carpet: {
+      centerX: 4.84,
+      centerZ: -2.03,
+      halfX: 9.2,
+      halfZ: 17.725,
+      holes: [
+        { kind: 'circle', x: 9, z: -11, radius: 3.2 }, // tractor start
+        { kind: 'box', x: 5.76, z: -1.85, halfX: 2.0, halfZ: 1.85 }, // shredder
+        { kind: 'box', x: 4.84, z: -16.1, halfX: 9.3, halfZ: 3.65 }, // apron in front of the gate
+      ],
+      /** Share of the floor the balls cover before the jitter. */
+      coverage: 0.78,
+      /** Random offset of each lattice point, share of the lattice step. */
+      jitter: 0.45,
+      /** Passes that push jittered neighbours apart (the spacing stops changing after 5-10; the example used 40). */
+      relaxPasses: 10,
+      seed: 1,
+    },
   },
 
   economy: {
