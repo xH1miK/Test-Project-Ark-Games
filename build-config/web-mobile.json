@@ -8,6 +8,7 @@
   "scenes": [
     { "url": "db://assets/scenes/Main.scene", "uuid": "b1579e2a-b71a-410a-b37e-963a7b4c2c7e" }
   ],
+  "useSplashScreen": false,
   "debug": false,
   "sourceMaps": false,
   "md5Cache": false,

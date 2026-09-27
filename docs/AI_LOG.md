@@ -31,7 +31,7 @@ Decision: the example is used as a behaviour/numbers reference only — no code 
 | 23:52 | Installed Funplay Cocos MCP v0.6.4 (pinned tag) into `extensions/`. **Reviewed its code before enabling**: network = GitHub release check only (no auto-install); client configs are written only from a panel button. Computed its per-project port (25720) from its source, pinned it + `full` tool profile in `funplay-cocos-mcp.config.json`, registered server `cocos` in `.mcp.json` | AI | `claude` CLI isn't on PATH, so `.mcp.json` instead of `claude mcp add` |
 | 23:56 | Added `docs/SETUP.md` (reproducible setup), `tools/serve.mjs` + `.claude/launch.json` (preview example / builds), migrated Claude memory to the new project path | AI | — |
 
-## 2026-09-27 (Sun) — MCP check & packaging smoke test (~12:58–13:45)
+## 2026-09-27 (Sun) — MCP check & packaging smoke test (~12:58–13:40)
 
 | Time | What | Who | Verification / notes |
 |---|---|---|---|
@@ -71,3 +71,13 @@ Engine variants (13:28–13:38, built and packed by a script through the same MC
 | legacy + particle + animation | 1,504,577 | 410,291 | 671,594 | +92 KB | 4 min 20 s |
 
 Decisions: keep the legacy pipeline (−49 KB, both render). The 3D ParticleSystem + animation cost +92 KB — affordable, decided at the juice stage (own pooled FX vs ParticleSystem). The final lean rebuild was **byte-identical** to the first one → builds are deterministic and the settings were restored exactly.
+
+## 2026-09-27 (Sun) — Splash off, MCP cleanup (~13:42–13:55)
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 13:42 | User asked for plainer instructions → AI opened the Build panel via MCP, screenshotted it and read the panel templates to name the exact buttons (task card ✎ = "Edit Build Project Config", option "Enable Splash") | AI | Instructions matched the real UI |
+| 13:47 | Unchecked **Enable Splash** in the Build panel; reconnected `cocos` in `/mcp` (native MCP tools now in the session) | human | `mcp__cocos__execute_javascript` works |
+| 13:49 | Removed the duplicate `cocos-test-project-1cb0e7` from `~/.claude.json` (user's go-ahead; backup `~/.claude.json.bak-2026-09-27`) | AI | Diff vs backup = only that key; re-checked later that the app hadn't re-added it |
+| 13:50 | Build with `useSplashScreen: false`: the builder itself writes `splashScreen.totalTime = 0` and drops the logo (`settings.json` 21 KB → 1.7 KB). The editor's form flags in `information.json` stayed `complete:false` — unchecking was enough; the "form required" reading of the i18n strings was over-cautious | AI | Single HTML **556,893 bytes**; `check-html` PASS portrait + landscape; engine+scene start 1.0–1.6 s (was 1.9–3.4 s with the splash) |
+| 13:52 | Scripted builds had left 5 identical tasks in the Build panel → `remove-task(id)` removes only the list entry (build files stay); `tools/build.mjs` now drops older tasks after a successful build | AI | Panel shows one task; rebuild byte-identical |

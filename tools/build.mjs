@@ -50,6 +50,15 @@ const t = (await Editor.Message.request('builder', 'query-tasks-info')).queue[ar
 return t ? { state: t.state, stage: t.stage, progress: t.progress, message: t.message, detail: t.detailMessage } : null;
 `;
 
+// Keep the Build panel tidy: drop older finished tasks with the same name (list entry only, files stay).
+const CLEANUP = `
+const q = (await Editor.Message.request('builder', 'query-tasks-info')).queue;
+const old = Object.values(q).filter(t => t.id !== args.keep && t.options && t.options.taskName === args.taskName
+  && t.state !== 'processing' && t.state !== 'waiting');
+for (const t of old) await Editor.Message.request('builder', 'remove-task', t.id);
+return old.length;
+`;
+
 const options = JSON.parse(readFileSync(configPath, 'utf8'));
 const started = Date.now();
 const id = await editorJs(ADD_TASK, { options });
@@ -67,6 +76,7 @@ for (;;) {
   if (t.state !== 'processing' && t.state !== 'waiting') {
     const ok = t.state === 'success';
     console.log(ok ? `done in ${((Date.now() - started) / 1000).toFixed(1)}s` : `FAILED: ${t.message}\n${t.detail}`);
+    if (ok) await editorJs(CLEANUP, { keep: id, taskName: options.taskName });
     process.exit(ok ? 0 : 1);
   }
   if (Date.now() - started > timeoutSec * 1000) throw new Error(`timeout after ${timeoutSec}s`);

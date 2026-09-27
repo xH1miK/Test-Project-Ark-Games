@@ -44,7 +44,8 @@ Exit code 36 = success, 32 = bad params, 34 = build error. Config JSON from Buil
 - Do NOT call `command-build` in a running editor (CLI entry point; may quit the app).
 - **Feature Cropping** lives in `Editor.Profile` project `engine` → `modules.configs.defaultConfig.{cache, includeModules, flags, noDeprecatedFeatures}` + `modules.graphics.pipeline`. `includeModules` holds feature names from `resources/3d/engine/cc.config.json`. Engine compile ~3.5 min, cached per option md5 in `%TEMP%/CocosCreator/3.8.8/builder/engine/`.
 - A disabled skybox still packs its cubemaps if the scene references them — clear `_envmap*` references.
-- **Splash**: removal is gated by the Cocos account (`information` package form, "Edit Build Project Config"); without it the builder forces the default splash (2 s, 19.6 KB logo in `settings.json`). Build option `useSplashScreen`.
+- **Splash**: build option `useSplashScreen` (Build panel → task ✎ "Edit Build Project Config" → "Enable Splash"). With it off the builder writes `splashScreen.totalTime = 0` and no logo (−19.6 KB, −2 s start). The i18n mentions an account form for failed removals; in our case unchecking was enough (`information.json` flags stayed `complete:false`).
+- `remove-task(id)` removes a Build-panel task entry only; the build folder stays.
 - Funplay One-Click Configure writes a duplicate **user-scope** MCP server into `~/.claude.json` (`cocos-<project>-<hash>`) and installs skills into `.claude/skills`.
 - Funplay `execute_javascript` safety checks reject string literals that look like absolute paths — including `'\n'` and `/` regexes; use `String.fromCharCode(10)` and `startsWith`. Scene context predeclares `cc, Editor, scene, director, args, console`; editor context predeclares `fs`, `path`.
 
