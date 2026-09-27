@@ -102,3 +102,17 @@ New session from the handoff prompt. Working rules added by the user: a git bran
 | 16:21 | Level via MCP in one scene script: ground (plane ×12, unlit tiled), 38 rocks in 4 walls (tall far walls, low near walls, seeded jitter), gate house, spots; shredder as a **linked prefab instance** under a transform node (`scene:create-node`); 40 StaticBlockers; `Game` + GameRoot; iso camera | AI | Read back the saved `.scene`: 40 blockers, 1 prefab instance, GameRoot → Level |
 | 16:23 | `check-html` extended: http targets (editor preview) and `--scenario`; `tools/scenarios/level.mjs` — flood fill from the start for tractor (r 1.2) and balls (r 0.275), reachability of pads and shredder zone, ASCII collision map, overview shot | AI | First run: preview scene has no name → loader probe fixed; then PASS |
 | 16:26 | Build (34 s) → pack → check from `file://` | AI | **PASS** portrait + landscape, 0 external requests. HTML **1.568 MB** (+1.0 MB: gate/shredder/rock meshes ≈0.7 MB raw, 2 PBR shader sources, gate JPEG). SwiftShader ≈15 fps (software GL) |
+| 16:30 | M1 merged into `main` with `tools/merge.mjs` (first use: no file on disk changed) | AI | `git log --graph`: one merge commit |
+
+### Level look pass (~16:32–16:50), branch `core/m1-level-look`
+
+User review of the screenshots: rocks look small next to the gate house, a visible hole in a corner, floor stones too big, the flat plain outside the arena looks empty — "play with the proportions".
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 16:33 | Asked whether to switch chats first; AI suggested finishing the level here (its building context was loaded) | human + AI | — |
+| 16:34 | `StaticMeshBatcher`: merges every rock into one mesh at startup (`BatchingUtility.batchStaticModel`); collision is built from the source meshes before | AI | Class compiled; typecheck OK |
+| 16:35 | Floor: arena plane with ~1.3-unit stones; `GroundOuter` darker plane outside, seam hidden under the rocks | AI | Materials created with exact-case URL, no lowercase tree |
+| 16:36 | Walls rebuilt: inner row 30 rocks (×1.6, collision, inner faces on the arena line), corner boulders, outer row without collision — tall on the far sides, lower on the near sides (camera-ray check: never above the line of sight to the tractor at the wall) | AI | `level` scenario: arena closed, spots reachable. Two more passes closed dark gaps between the rows (outer row closer and denser) |
+| 16:40 | Scenario bug: `cc.MeshRenderer` is undefined on the runtime `cc` namespace (exists in the editor) → `cc.js.getClassByName` | AI | Check fixed: 69 rocks → 1 batched renderer, 4–7 draw calls per frame |
+| 16:44 | Build → pack → check from `file://`; `check-html --gpu` added (real GPU instead of SwiftShader) | AI | PASS both orientations; **1.574 MB**; SwiftShader 4 fps (software fill of big PBR rocks), **GPU 60 fps**, start 1.4–1.8 s |

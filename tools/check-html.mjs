@@ -4,7 +4,7 @@
 // scenario (tools/scenarios/<name>.mjs) that drives the game through the ?qa hooks (window.__zm).
 //
 //   node tools/check-html.mjs [dist/ZombieMiner.html | http://localhost:7456/] [--size 390x844] [--size 844x390]
-//                            [--wait 15] [--query zm-inflate=js] [--shots dist/shots] [--scenario level]
+//                            [--wait 15] [--query zm-inflate=js] [--shots dist/shots] [--scenario level] [--gpu]
 //
 // A file is opened from file:// (the real ad-network condition); an http URL (e.g. the editor preview)
 // is handy while iterating. Env: CHROME_PATH to override the browser. Exit code 1 if any check fails.
@@ -22,6 +22,7 @@ const takeAll = (name) => {
   return out;
 };
 const sizes = takeAll('--size');
+const useGpu = argv.includes('--gpu') && Boolean(argv.splice(argv.indexOf('--gpu'), 1));
 const waitSec = Number(takeAll('--wait')[0] || 15);
 const scenarioName = takeAll('--scenario')[0];
 const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1'].filter(Boolean);
@@ -55,7 +56,9 @@ async function withBrowser(fn) {
     '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
     '--disable-background-networking', '--disable-component-update', '--no-pings',
-    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required',
+    // Default: SwiftShader (software GL, same result on any machine). --gpu: the real GPU, for FPS numbers.
+    ...(useGpu ? ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu-rasterization'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
+    '--autoplay-policy=no-user-gesture-required',
     'about:blank',
   ], { stdio: 'ignore' });
   try {
@@ -151,7 +154,7 @@ function scenarioContext(cdp, size, results) {
 
 let failed = false;
 console.log(`${label}${isHttp ? '' : `  (${(readFileSync(target).length / 1e6).toFixed(3)} MB)`} in ${basename(exe)}` +
-  (scenarioName ? `, scenario: ${scenarioName}` : ''));
+  ` (${useGpu ? 'GPU' : 'SwiftShader'})` + (scenarioName ? `, scenario: ${scenarioName}` : ''));
 mkdirSync(shotsDir, { recursive: true });
 
 await withBrowser(async (cdp) => {
