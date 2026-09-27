@@ -12,6 +12,11 @@ export interface TractorTierConfig {
   readonly bucketCapacity: number;
   /** Radius of the body circle used against static obstacles. */
   readonly bodyRadius: number;
+  /**
+   * How far ahead of the pivot the body circle sits. The pivot is the turning point between the
+   * tracks; the circle is centred over the whole machine, bucket included, so the bucket stops at a wall.
+   */
+  readonly bodyOffset: number;
 }
 
 export interface XZBounds {
@@ -22,6 +27,11 @@ export interface XZBounds {
 }
 
 export const Config = {
+  time: {
+    /** Longest frame the simulation accepts, s; after a hitch the game slows down instead of jumping. */
+    maxFrameDt: 0.25,
+  },
+
   world: {
     /** Area covered by the static obstacle grid (world XZ); the arena plus its rock walls. */
     bounds: { minX: -16, maxX: 26, minZ: -32, maxZ: 26 } as XZBounds,
@@ -31,16 +41,23 @@ export const Config = {
 
   tractor: {
     tiers: [
-      { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2 },
-      { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8 },
+      // Tractor1 spans z -0.77..1.88 around its pivot (bucket in front), half width 0.85.
+      { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55 },
+      // Tractor2: bodyOffset to be measured when its model goes in (progression stage).
+      { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0 },
     ] as readonly TractorTierConfig[],
     /** Maximum turn rate, degrees/s. */
     turnSpeed: 240,
     /** Acceleration and braking, units/s². */
     accel: 14,
     brake: 22,
-    /** Circle-vs-obstacle resolve passes per frame. */
-    collisionPasses: 2,
+    /**
+     * Circle-vs-obstacle resolve passes per step (stops early once nothing pushes). Pockets between
+     * rotated rocks need 4 to stay under 0.05 penetration at 4 fps; each pass halves what is left.
+     */
+    collisionPasses: 4,
+    /** Longest movement step, s; slower frames are split into several steps. */
+    maxStep: 1 / 30,
   },
 
   camera: {
@@ -61,6 +78,14 @@ export const Config = {
     knobRadius: 80,
     /** Input below this fraction of the radius counts as zero. */
     deadZone: 0.08,
+    /** Rest point of the base: horizontally centred, this far above the bottom edge. */
+    restHeight: 300,
+    /** A touch never puts the base centre closer than this to a screen edge. */
+    edgeMargin: 160,
+    /** After release the joystick glides back to rest over about this time, s. */
+    returnTime: 0.25,
+    /** Opacity at rest (0..255); 0 hides the joystick until the first touch. */
+    idleOpacity: 140,
   },
 
   balls: {

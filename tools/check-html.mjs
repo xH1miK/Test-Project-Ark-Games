@@ -7,7 +7,8 @@
 //                            [--wait 15] [--query zm-inflate=js] [--shots dist/shots] [--scenario level] [--gpu]
 //
 // A file is opened from file:// (the real ad-network condition); an http URL (e.g. the editor preview)
-// is handy while iterating. Env: CHROME_PATH to override the browser. Exit code 1 if any check fails.
+// is handy while iterating. The page runs as a phone: mobile viewport, DPR 2, touch screen.
+// Env: CHROME_PATH to override the browser. Exit code 1 if any check fails.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -131,6 +132,10 @@ function scenarioContext(cdp, size, results) {
     evaluate: cdp.evaluate,
     sleep,
     shot,
+    /** Real touch input through DevTools: type touchStart | touchMove | touchEnd, point in CSS px. */
+    touch: (type, x, y) => cdp.send('Input.dispatchTouchEvent', {
+      type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y, id: 1, radiusX: 4, radiusY: 4, force: 1 }],
+    }),
     log: (...args) => results.log.push(args.join(' ')),
     check: (ok, message) => {
       results.checks.push({ ok: !!ok, message });
@@ -178,6 +183,8 @@ await withBrowser(async (cdp) => {
     requests.length = 0;
     problems.length = 0;
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: true });
+    // A phone has a touch screen: the engine picks touch input at startup ('ontouchstart' in window).
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     await cdp.send('Page.navigate', { url });
     let probe;
     const t0 = Date.now();
