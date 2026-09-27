@@ -1,0 +1,44 @@
+{
+  "name": "ZombieMiner",
+  "platform": "web-mobile",
+  "taskName": "web-mobile",
+  "outputName": "web-mobile",
+  "buildPath": "project://build",
+  "startScene": "b1579e2a-b71a-410a-b37e-963a7b4c2c7e",
+  "scenes": [
+    { "url": "db://assets/scenes/Main.scene", "uuid": "b1579e2a-b71a-410a-b37e-963a7b4c2c7e" }
+  ],
+  "debug": false,
+  "sourceMaps": false,
+  "md5Cache": false,
+  "buildMode": "normal",
+  "mangleProperties": true,
+  "inlineEnum": true,
+  "skipCompressTexture": false,
+  "packAutoAtlas": true,
+  "mergeStartScene": false,
+  "startSceneAssetBundle": false,
+  "experimentalEraseModules": false,
+  "mainBundleCompressionType": "merge_all_json",
+  "mainBundleIsRemote": false,
+  "useBuiltinServer": false,
+  "server": "",
+  "nativeCodeBundleMode": "asmjs",
+  "wasmCompressionMode": false,
+  "polyfills": { "asyncFunctions": false },
+  "overwriteProjectSettings": {
+    "includeModules": {
+      "physics": "inherit-project-setting",
+      "physics-2d": "inherit-project-setting",
+      "gfx-webgl2": "inherit-project-setting"
+    },
+    "macroConfig": { "cleanupImageCache": "inherit-project-setting" }
+  },
+  "packages": {
+    "web-mobile": {
+      "orientation": "auto",
+      "embedWebDebugger": false,
+      "useWebGPU": false
+    }
+  }
+}
