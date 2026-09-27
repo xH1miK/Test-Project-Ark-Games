@@ -118,10 +118,12 @@ writeFileSync(outFile, html);
 // ---- size report ------------------------------------------------------------------------------------
 const size = Buffer.byteLength(html);
 const b64len = (n) => Math.ceil(n / 3) * 4;
+// The game's own code is compiled into the main bundle's index.js; src/chunks/ only holds a loader stub.
 const groupOf = (p) =>
   p.startsWith('cocos-js/') ? 'engine  cocos-js/'
+  : /^assets\/main\/index(\.[0-9a-f]+)?\.js$/.test(p) ? 'game code  assets/main/index.js'
   : p.startsWith('assets/') ? `bundle  ${p.split('/').slice(0, 2).join('/')}/`
-  : p.startsWith('src/chunks/') ? 'game scripts  src/chunks/'
+  : p.startsWith('src/chunks/') ? 'chunk stub  src/chunks/'
   : p === 'src/settings.json' ? 'settings  src/settings.json'
   : 'boot  polyfills, SystemJS, index/application.js';
 const groups = new Map();
