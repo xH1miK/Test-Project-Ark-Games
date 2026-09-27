@@ -4,8 +4,8 @@ import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
 
 const SETTINGS = { turnSpeed: 240, accel: 14, brake: 22, collisionPasses: 2, maxStep: 1 / 30 };
-const T1 = { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2 };
-const T2 = { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8 };
+const T1 = { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55 };
+const T2 = { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0 };
 const BOUNDS = { minX: -30, maxX: 30, minZ: -30, maxZ: 30 };
 const DEG = Math.PI / 180;
 const near = (actual, expected, eps = 1e-9) =>
@@ -21,9 +21,9 @@ const make = (...boxes) => {
 const run = (tractor, seconds, x, z, fps = 60) => {
   for (let i = 0, n = Math.round(seconds * fps); i < n; i++) tractor.update(1 / fps, x, z);
 };
-/** How deep the tractor circle still sits inside the obstacles. */
+/** How deep the tractor's body circle still sits inside the obstacles. */
 const penetration = (tractor, grid) =>
-  grid.resolveCircle(tractor.x, tractor.z, tractor.bodyRadius, Blocks.Tractor, { x: 0, z: 0 });
+  grid.resolveCircle(tractor.bodyX, tractor.bodyZ, tractor.bodyRadius, Blocks.Tractor, { x: 0, z: 0 });
 
 test('model faces +Z at yaw 0 and drives straight ahead', () => {
   const { tractor } = make();
@@ -74,11 +74,21 @@ test('slows down in a turn: cos of the heading error', () => {
   assert.ok(tractor.speed < 3.6 - 0.3, `braking in the turn: ${tractor.speed}`);
 });
 
-test('a wall stops the tractor at its surface, no penetration', () => {
+test('the body circle sits bodyOffset ahead of the pivot', () => {
+  const { tractor } = make();
+  near(tractor.bodyX, 0);
+  near(tractor.bodyZ, 0.55);
+  tractor.place(2, 3, Math.PI / 2);
+  near(tractor.bodyX, 2.55);
+  near(tractor.bodyZ, 3, 1e-9);
+});
+
+test('a wall stops the body (bucket included) at its surface, no penetration', () => {
   // Wall face at z = 5.
   const { tractor, grid } = make({ x: 0, z: 6, halfX: 10, halfZ: 1 });
   run(tractor, 3, 0, 1);
-  near(tractor.z, 5 - 1.2, 1e-6);
+  near(tractor.bodyZ, 5 - 1.2, 1e-6);
+  near(tractor.z, 5 - 1.2 - 0.55, 1e-6); // the pivot stays behind
   assert.ok(penetration(tractor, grid) <= 1e-6);
   const before = tractor.odometer;
   run(tractor, 1, 0, 1); // keep ramming
@@ -91,7 +101,7 @@ test('slides along a wall when driving into it at an angle', () => {
   const x0 = tractor.x;
   run(tractor, 1, 1, 1); // 45° into the wall
   assert.ok(tractor.x > x0 + 1.5, `slid ${tractor.x - x0}`);
-  near(tractor.z, 3.8, 1e-6);
+  near(tractor.bodyZ, 3.8, 1e-6);
   assert.ok(penetration(tractor, grid) <= 1e-6);
 });
 
@@ -104,9 +114,22 @@ test('ramming a corner keeps penetration under 0.05, even at 4 fps', () => {
       worst = Math.max(worst, penetration(tractor, grid));
     }
     assert.ok(worst <= 0.05, `${fps} fps: penetration ${worst}`);
-    near(tractor.x, 3 - 1.2, 0.05);
-    near(tractor.z, 5 - 1.2, 0.05);
+    near(tractor.bodyX, 3 - 1.2, 0.05);
+    near(tractor.bodyZ, 5 - 1.2, 0.05);
   }
+});
+
+test('turning on the spot at a wall: the swinging body pushes the pivot off, never into the wall', () => {
+  const { tractor, grid } = make({ x: 0, z: 6, halfX: 10, halfZ: 1 });
+  run(tractor, 3, 0, 1); // bucket against the wall
+  const z0 = tractor.z;
+  let worst = 0;
+  for (let i = 0; i < 60; i++) {
+    tractor.update(1 / 60, 0, -1); // turn round
+    worst = Math.max(worst, penetration(tractor, grid));
+  }
+  assert.ok(worst <= 1e-6, `penetration ${worst}`);
+  assert.ok(tractor.z <= z0 + 1e-9, 'the pivot never moves toward the wall');
 });
 
 test('a long frame is split into steps: 4 fps lands where 60 fps does', () => {

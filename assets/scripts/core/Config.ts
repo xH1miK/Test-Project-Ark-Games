@@ -12,6 +12,11 @@ export interface TractorTierConfig {
   readonly bucketCapacity: number;
   /** Radius of the body circle used against static obstacles. */
   readonly bodyRadius: number;
+  /**
+   * How far ahead of the pivot the body circle sits. The pivot is the turning point between the
+   * tracks; the circle is centred over the whole machine, bucket included, so the bucket stops at a wall.
+   */
+  readonly bodyOffset: number;
 }
 
 export interface XZBounds {
@@ -36,8 +41,10 @@ export const Config = {
 
   tractor: {
     tiers: [
-      { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2 },
-      { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8 },
+      // Tractor1 spans z -0.77..1.88 around its pivot (bucket in front), half width 0.85.
+      { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55 },
+      // Tractor2: bodyOffset to be measured when its model goes in (progression stage).
+      { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0 },
     ] as readonly TractorTierConfig[],
     /** Maximum turn rate, degrees/s. */
     turnSpeed: 240,

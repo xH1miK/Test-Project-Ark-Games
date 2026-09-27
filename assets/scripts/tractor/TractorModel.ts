@@ -58,6 +58,15 @@ export class TractorModel {
     return this.tier.bodyRadius;
   }
 
+  /** Centre of the body circle (what collides): bodyOffset ahead of the pivot. */
+  get bodyX(): number {
+    return this.x + Math.sin(this.yaw) * this.tier.bodyOffset;
+  }
+
+  get bodyZ(): number {
+    return this.z + Math.cos(this.yaw) * this.tier.bodyOffset;
+  }
+
   /** Switches the stats (tractor upgrade); position and heading are kept. */
   setTier(tier: TractorTierConfig): void {
     this.tier = tier;
@@ -95,18 +104,25 @@ export class TractorModel {
     }
     this.speed = this.speed < targetSpeed ? Math.min(targetSpeed, this.speed + accel * dt) : Math.max(targetSpeed, this.speed - brake * dt);
 
+    // Move the body circle (it swings round the pivot while turning), push it out of the obstacles,
+    // then put the pivot back behind it.
     const fromX = this.x;
     const fromZ = this.z;
-    let x = fromX + Math.sin(this.yaw) * this.speed * dt;
-    let z = fromZ + Math.cos(this.yaw) * this.speed * dt;
+    const forwardX = Math.sin(this.yaw);
+    const forwardZ = Math.cos(this.yaw);
+    const ahead = this.speed * dt + this.tier.bodyOffset;
+    let x = fromX + forwardX * ahead;
+    let z = fromZ + forwardZ * ahead;
     for (let pass = 0; pass < collisionPasses; pass++) {
       if (this.blocker.resolveCircle(x, z, this.tier.bodyRadius, Blocks.Tractor, this.resolved) <= 0) break;
       x = this.resolved.x;
       z = this.resolved.z;
     }
-    this.x = x;
-    this.z = z;
-    this.odometer += Math.sqrt((x - fromX) * (x - fromX) + (z - fromZ) * (z - fromZ));
+    this.x = x - forwardX * this.tier.bodyOffset;
+    this.z = z - forwardZ * this.tier.bodyOffset;
+    const movedX = this.x - fromX;
+    const movedZ = this.z - fromZ;
+    this.odometer += Math.sqrt(movedX * movedX + movedZ * movedZ);
   }
 }
 
