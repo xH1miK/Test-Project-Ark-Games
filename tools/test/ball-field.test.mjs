@@ -4,7 +4,7 @@ import { Config, PusherFace } from '../../assets/scripts/core/Config.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
 import { layCarpet } from '../../assets/scripts/balls/BallCarpet.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
-import { CARPET_ROUTE, arenaGrid, autopilot, frame, makeWorld, measure } from './ball-world.mjs';
+import { CARPET_ROUTE, LEVEL, arenaGrid, autopilot, frame, makeWorld, measure } from './ball-world.mjs';
 
 const R = Config.balls.radius;
 const D = 2 * R;
@@ -26,6 +26,34 @@ const steps = (balls, n, pusher = null, dt = 1 / 60, each) => {
   }
 };
 const snapshot = (balls) => [Float64Array.from(balls.x), Float64Array.from(balls.y), Float64Array.from(balls.z)];
+
+// --- arena ---
+
+test('the arena holds balls: no way out for a ball centre from the start (0.05 flood fill)', () => {
+  const grid = arenaGrid();
+  const { minX, maxX, minZ, maxZ } = grid.bounds;
+  const step = 0.05;
+  const cols = Math.round((maxX - minX) / step);
+  const rows = Math.round((maxZ - minZ) / step);
+  const seen = new Uint8Array(cols * rows);
+  const start = LEVEL.spots.tractorStart;
+  const queue = [Math.floor((start.x - minX) / step) + Math.floor((start.z - minZ) / step) * cols];
+  seen[queue[0]] = 1;
+  let leak = null;
+  while (queue.length && !leak) {
+    const i = queue.pop();
+    const c = i % cols;
+    const k = (i - c) / cols;
+    if (c === 0 || k === 0 || c === cols - 1 || k === rows - 1) leak = { x: minX + c * step, z: minZ + k * step };
+    for (const [dc, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const j = c + dc + (k + dk) * cols;
+      if (seen[j] || grid.overlapsCircle(minX + (c + dc) * step, minZ + (k + dk) * step, R, Blocks.Balls)) continue;
+      seen[j] = 1;
+      queue.push(j);
+    }
+  }
+  assert.equal(leak, null, `a ball gets out near ${JSON.stringify(leak)}`);
+});
 
 // --- carpet ---
 

@@ -36,8 +36,10 @@ const SAMPLE = `(() => {
     return { leak, area: count * step * step, reached, seen, cols, rows, step };
   };
 
-  const tractor = flood(1.2, B.tractor, 0.5);
-  const balls = flood(0.275, B.balls, 0.5);
+  // The step must be finer than the narrowest crack a centre could pass: a 0.5 step missed a 0.9-wide
+  // gap between two rocks (0.36 of free room for a ball centre) on 27.09.
+  const tractor = flood(1.2, B.tractor, 0.25);
+  const balls = flood(0.275, B.balls, 0.1);
 
   // Shredder hand-in zone (square +-3.5 around its pivot) must contain reachable tractor positions.
   let shredderZone = 0;
