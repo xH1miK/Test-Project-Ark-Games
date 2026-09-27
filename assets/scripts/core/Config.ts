@@ -22,6 +22,11 @@ export interface XZBounds {
 }
 
 export const Config = {
+  time: {
+    /** Longest frame the simulation accepts, s; after a hitch the game slows down instead of jumping. */
+    maxFrameDt: 0.25,
+  },
+
   world: {
     /** Area covered by the static obstacle grid (world XZ); the arena plus its rock walls. */
     bounds: { minX: -16, maxX: 26, minZ: -32, maxZ: 26 } as XZBounds,
@@ -39,8 +44,10 @@ export const Config = {
     /** Acceleration and braking, units/s². */
     accel: 14,
     brake: 22,
-    /** Circle-vs-obstacle resolve passes per frame. */
+    /** Circle-vs-obstacle resolve passes per step. */
     collisionPasses: 2,
+    /** Longest movement step, s; slower frames are split into several steps. */
+    maxStep: 1 / 30,
   },
 
   camera: {
@@ -61,6 +68,14 @@ export const Config = {
     knobRadius: 80,
     /** Input below this fraction of the radius counts as zero. */
     deadZone: 0.08,
+    /** Rest point of the base: horizontally centred, this far above the bottom edge. */
+    restHeight: 300,
+    /** A touch never puts the base centre closer than this to a screen edge. */
+    edgeMargin: 160,
+    /** After release the joystick glides back to rest over about this time, s. */
+    returnTime: 0.25,
+    /** Opacity at rest (0..255); 0 hides the joystick until the first touch. */
+    idleOpacity: 140,
   },
 
   balls: {
