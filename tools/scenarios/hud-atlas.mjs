@@ -1,61 +1,53 @@
-// The coin counter's number and the dynamic atlas (M7 draw-call question). The plate and the icon
-// are packed into the engine's dynamic atlas and batch with the joystick; the number (a Label) draws
-// its own texture. Measured per cache mode of the number (NONE, BITMAP, CHAR): draw calls at rest;
-// then, in BITMAP (the label's texture goes into the dynamic atlas), the number changes once a frame
-// CHANGES times: the atlas's fill (its shelf cursor), how many atlas pages exist, how many were made
-// and destroyed, draw calls and frame time as it goes. The scene's own cache mode is put back after.
+// The coin counter's number, draw calls and the dynamic atlas (M7). The plate and the icon are packed
+// into the engine's dynamic atlas and batch with the joystick. The number uses a bitmap font
+// (assets/fonts/hud-digits, tools/art/font.mjs): its page is packed once and joins that batch, and a
+// new number only moves quads. Checked: at rest the number costs no draw call; while the number
+// changes every frame (CHANGES times) no GPU texture is made, the atlas keeps its pages and the draw
+// calls stay put. For comparison the same number in the system font (what it was before M7), per
+// cache mode: NONE draws its own texture (remade on every change), CHAR its letter atlas, BITMAP
+// packs it into the dynamic atlas on every change and never gets the space back: once page 0 is
+// full, every change makes a new 2048² page.
 //
 //   node tools/check-html.mjs <html|url> --scenario hud-atlas [--gpu]
 
 const CHANGES = 1500;
 
 const SETUP = `(() => {
-  const Label = cc.js.getClassByName('cc.Label');
-  const label = cc.find('Canvas/Hud/CoinHud/Plate/Amount').getComponent(Label);
+  const label = cc.find('Canvas/Hud/CoinHud/Plate/Amount').getComponent(cc.js.getClassByName('cc.Label'));
   const mgr = cc.internal.dynamicAtlasManager;
-  window.__hudAtlas = { label, mgr, scene: label.cacheMode };
-  return { scene: label.cacheMode, atlasEnabled: mgr.enabled, pages: mgr.atlasCount, textureSize: mgr.textureSize, maxPages: mgr.maxAtlasCount };
-})()`;
-
-/** The atlas pages: fill of each (shelf cursor y, next shelf), textures packed. */
-const ATLAS = `(() => {
-  const { mgr, label } = __hudAtlas;
-  const frame = label.ttfSpriteFrame;
-  return { pages: mgr._atlases.map((a) => ({ x: a._x, y: a._y, nextY: a._nextY, height: a._height, textures: a._count })),
-    labelPacked: !!(frame && frame.original), canvas: frame && frame.texture ? [frame.texture.width, frame.texture.height] : null };
+  window.__hudAtlas = { label, mgr, font: label.font, mode: label.cacheMode };
+  const bitmap = label.font instanceof cc.js.getClassByName('cc.BitmapFont');
+  return { font: label.font ? label.font.name + (bitmap ? ' (bitmap font)' : '') : 'system ' + label.fontFamily,
+    atlas: mgr.enabled, pages: mgr.atlasCount, textureSize: mgr.textureSize, maxPages: mgr.maxAtlasCount };
 })()`;
 
 /**
- * Changes the number once a frame, CHANGES times, sampling the atlas and the frame after each; counts
- * the GPU textures created meanwhile and how often the last atlas page was a new object.
+ * Changes the number once a frame, CHANGES times; counts the GPU textures made meanwhile and among them
+ * the dynamic atlas' pages (textures of its page size: the engine's private fields are mangled in the
+ * build, the gfx texture info is not), the change that made the first page (page 0 was full); draw
+ * calls before and after that, frame times. The shelf of page 0 is read where the fields keep their
+ * names (the editor preview).
  */
 const CHURN = `new Promise((done) => {
-  const { mgr, label } = __hudAtlas, hud = __zm.coinHud, device = cc.director.root.device;
-  let n = 0, made = 0, dropped = 0, before = mgr.atlasCount, firstFull = -1, last = performance.now(), textures = 0, renewed = 0;
-  let lastPage = mgr._atlases[mgr._atlases.length - 1];
-  const createTexture = device.createTexture;
-  device.createTexture = function (...args) { textures++; return createTexture.apply(this, args); };
-  const frameMs = [], pagesAt = [], draws = [];
+  const { mgr } = __hudAtlas, hud = __zm.coinHud, device = cc.director.root.device, size = mgr.textureSize;
+  let n = 0, pages = 0, textures = 0, firstFull = -1, last = performance.now();
+  const frameMs = [], draws = [], createTexture = device.createTexture;
+  device.createTexture = function (info, ...rest) {
+    textures++;
+    if (info && info.width === size && info.height === size) { pages++; if (firstFull < 0) firstFull = n; }
+    return createTexture.call(this, info, ...rest);
+  };
   const tick = () => {
-    const pages = mgr.atlasCount, page = mgr._atlases[pages - 1];
-    if (page !== lastPage && pages === before) renewed++;
-    lastPage = page;
-    if (pages > before) made += pages - before;
-    if (pages < before) dropped += before - pages;
-    before = pages;
     const now = performance.now();
     frameMs.push(now - last); last = now;
     draws.push(device.numDrawCalls);
-    pagesAt.push(pages);
-    const page0 = mgr._atlases[0];
-    if (firstFull < 0 && pages > 1) firstFull = n;
     if (n >= ${CHANGES}) {
       cc.director.off(cc.Director.EVENT_AFTER_UPDATE, tick);
       device.createTexture = createTexture;
-      const sorted = frameMs.slice(5).sort((a, b) => a - b);
-      done({ changes: n, made, dropped, firstFull, textures, renewed, pagesMax: Math.max(...pagesAt), pagesEnd: pages,
-        page0: page0 ? { y: page0._y, nextY: page0._nextY, height: page0._height, textures: page0._count } : null,
-        drawsBefore: draws.slice(5, firstFull > 0 ? firstFull : draws.length), drawsAfter: firstFull > 0 ? draws.slice(firstFull + 2) : [],
+      const sorted = frameMs.slice(5).sort((a, b) => a - b), page0 = mgr._atlases && mgr._atlases[0];
+      const range = (list) => list.length ? Math.min(...list) + '..' + Math.max(...list) : '-';
+      done({ textures, pages, firstFull, atlasCount: mgr.atlasCount, page0: page0 ? page0._y + ' of ' + page0._height : null,
+        drawsBefore: range(draws.slice(5, firstFull > 0 ? firstFull : draws.length)), drawsAfter: range(firstFull > 0 ? draws.slice(firstFull + 2) : []),
         frameP50: sorted[Math.floor(sorted.length / 2)], frameP95: sorted[Math.floor(sorted.length * 0.95)], frameMax: sorted[sorted.length - 1] });
       return;
     }
@@ -64,41 +56,47 @@ const CHURN = `new Promise((done) => {
   cc.director.on(cc.Director.EVENT_AFTER_UPDATE, tick);
 })`;
 
-const range = (list) => (list.length ? `${Math.min(...list)}..${Math.max(...list)}` : '-');
+const describe = (c) => `${c.textures} GPU textures made, ${c.pages} of them atlas pages (${c.atlasCount} page(s) at the end); ` +
+  `page 0 ${c.firstFull < 0 ? 'never full' : `full after ${c.firstFull} changes`}${c.page0 ? ` (its shelf at ${c.page0})` : ''}; draw calls ${c.drawsBefore}` +
+  `${c.firstFull < 0 ? '' : ` while it had room, ${c.drawsAfter} after`}; frame ${c.frameP50.toFixed(1)} ms p50, ${c.frameP95.toFixed(1)} p95, ${c.frameMax.toFixed(1)} max`;
 
 export default async function hudAtlas(t) {
   await t.waitFor('!!(window.__zm && window.__zm.coinHud)');
   const setup = await t.evaluate(SETUP);
-  t.log(`scene cache mode ${setup.scene} (0 NONE, 1 BITMAP, 2 CHAR); dynamic atlas ${setup.atlasEnabled ? 'on' : 'off'}, ${setup.pages} page(s) of ${setup.textureSize}², at most ${setup.maxPages}`);
+  t.log(`number: ${setup.font}; dynamic atlas ${setup.atlas ? 'on' : 'off'}, ${setup.pages} page(s) of ${setup.textureSize}², at most ${setup.maxPages}`);
   const draws = async () => {
     await t.frames(4);
     return t.evaluate('cc.director.root.device.numDrawCalls');
   };
-  const byMode = {};
+  const showNumber = (on) => t.evaluate(`cc.find('Canvas/Hud/CoinHud/Plate/Amount').active = ${on}`);
+  await showNumber(false);
+  const without = await draws();
+  await showNumber(true);
+
+  // The scene's number.
+  const scene = await draws();
+  const churn = await t.evaluate(CHURN);
+  t.log(`scene's number: ${scene} draw calls at rest (${without} without it); ${CHANGES} changes: ${describe(churn)}`);
+  t.check(scene === without, `the number costs no draw call at rest (${scene} with it, ${without} without)`);
+  t.check(churn.textures === 0 && churn.pages === 0, `changing the number makes no texture and no atlas page (${churn.textures} textures, ${churn.pages} pages)`);
+  t.check(churn.drawsBefore === `${scene}..${scene}`, `the draw calls stay at ${scene} while the number changes (${churn.drawsBefore})`);
+
+  // The same number in the system font, per cache mode (0 NONE, 1 BITMAP, 2 CHAR).
+  await t.evaluate('__hudAtlas.label.font = null');
+  const modes = {};
   for (const [mode, name] of [[0, 'NONE'], [1, 'BITMAP'], [2, 'CHAR']]) {
     await t.evaluate(`__hudAtlas.label.cacheMode = ${mode}`);
-    byMode[name] = await draws();
+    modes[name] = await draws();
   }
-  await t.evaluate(`cc.find('Canvas/Hud/CoinHud/Plate/Amount').active = false`);
-  const noNumber = await draws();
-  await t.evaluate(`cc.find('Canvas/Hud/CoinHud/Plate/Amount').active = true`);
-  t.log(`draw calls at rest: number NONE ${byMode.NONE}, BITMAP ${byMode.BITMAP}, CHAR ${byMode.CHAR}; without the number ${noNumber}`);
+  t.log(`system font: ${modes.NONE} draw calls at rest in NONE, ${modes.BITMAP} in BITMAP, ${modes.CHAR} in CHAR`);
+  for (const [mode, name] of [[0, 'NONE'], [1, 'BITMAP']]) {
+    await t.evaluate(`__hudAtlas.label.cacheMode = ${mode}`);
+    await t.frames(4);
+    t.log(`system font, ${name}, ${CHANGES} changes: ${describe(await t.evaluate(CHURN))}`);
+  }
 
-  await t.evaluate('__hudAtlas.label.cacheMode = 0');
-  await t.frames(4);
-  const none = await t.evaluate(CHURN);
-  t.log(`NONE, ${none.changes} changes (one a frame): ${none.textures} GPU textures created; draw calls ${range(none.drawsBefore)}; frame ${none.frameP50.toFixed(1)} ms p50, ${none.frameP95.toFixed(1)} p95, ${none.frameMax.toFixed(1)} max`);
-  await t.evaluate('__hudAtlas.label.cacheMode = 1');
-  await t.frames(4);
-  t.log(`BITMAP at rest: ${JSON.stringify(await t.evaluate(ATLAS))}`);
-  const churn = await t.evaluate(CHURN);
-  const after = await t.evaluate(ATLAS);
-  t.log(`BITMAP, ${churn.changes} changes (one a frame): page 0 full after ${churn.firstFull < 0 ? 'never' : `${churn.firstFull} changes`}; ` +
-    `pages made ${churn.made}, destroyed ${churn.dropped}, last page renewed in ${churn.renewed} frames, ${churn.textures} GPU textures created, at most ${churn.pagesMax} pages at once; page 0 cursor y ${churn.page0?.y} of ${churn.page0?.height}, ${churn.page0?.textures} texture(s) in it`);
-  t.log(`BITMAP draw calls while page 0 had room ${range(churn.drawsBefore)}, after ${range(churn.drawsAfter)}; frame ${churn.frameP50.toFixed(1)} ms p50, ${churn.frameP95.toFixed(1)} p95, ${churn.frameMax.toFixed(1)} max`);
-  t.log(`atlas after: ${JSON.stringify(after)}`);
-
-  await t.evaluate(`__hudAtlas.label.cacheMode = __hudAtlas.scene`);
-  await t.evaluate('__zm.coinHud.show(__zm.purse.total, false)');
-  t.check(true, 'measured');
+  // Back to the scene's setup.
+  await t.evaluate('(() => { const h = __hudAtlas; h.label.cacheMode = h.mode; h.label.font = h.font; __zm.coinHud.show(__zm.purse.total, false); })()');
+  t.check((await draws()) === scene, 'the scene\'s number is back');
+  await t.shot('hud');
 }

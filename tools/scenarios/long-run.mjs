@@ -11,6 +11,7 @@
 //
 //   node tools/check-html.mjs <html|url> --scenario long-run [--gpu]
 //   ZM_LONG_SHARES=0.1,0.2 ... ends the phases at these shares of the carpet (a quick run)
+//   ZM_HEAP_DIFF=1 ... also heap snapshots at the baseline and at the end: what the heap grew by, by kind
 
 import { driveLegs, installAutopilot } from './lib/autopilot.mjs';
 import { FPS } from './lib/camera.mjs';
@@ -129,11 +130,13 @@ export default async function longRun(t) {
   const total = start.count;
   t.log(`carpet: ${total} balls; phases ${phases.map((p) => `${p.name} to ${Math.round(100 * p.share)}%`).join(', ')}`);
 
-  // Heap checkpoints: live JS heap after a full GC.
+  // Heap checkpoints: live JS heap after a full GC; with ZM_HEAP_DIFF, snapshots at the baseline and the end.
   const heap = [];
+  const snapshots = {};
   const checkpoint = async (label) => {
     const h = await t.heap();
     heap.push({ label, used: h.usedSize, clock: await t.evaluate('__ap.clock') });
+    if (process.env.ZM_HEAP_DIFF === '1' && (label === `round ${HEAP_EVERY}` || label === 'end')) snapshots[label] = await t.heapSnapshot();
   };
   await overview(t, 'carpet-before');
   await checkpoint('start');
@@ -146,6 +149,8 @@ export default async function longRun(t) {
       await t.evaluate(`(() => { __zm.tractor.setTier(__zm.config.tractor.tiers[${phase.tier}]); __zm.events.emit('tierChanged', { tier: ${phase.tier + 1} }); })()`);
     }
     await t.evaluate(`__runMetrics.begin('${phase.name}')`);
+    // The bucket takes up the new tier's capacity on its next step: read it from the tier.
+    const capacity = await t.evaluate(`__zm.config.tractor.tiers[${phase.tier}].bucketCapacity`);
     const sold = [];
     for (let k = 0; k < phase.maxRounds; k++, round++) {
       const s = await loopState(t);
@@ -153,7 +158,7 @@ export default async function longRun(t) {
       const [fill, sell] = await driveLegs(t, roundLegs(round, phase.tier, shredder), 150000);
       const now = await loopState(t);
       sold.push(sell.sold);
-      const ok = fill.ok && fill.reason === 'full' && fill.load === s.capacity && sell.ok && sell.reason === 'inZone' && sell.sold === s.capacity;
+      const ok = fill.ok && fill.reason === 'full' && fill.load === capacity && sell.ok && sell.reason === 'inZone' && sell.sold === capacity;
       if (!ok) failed.push(round);
       t.log(`${phase.name} round ${String(round).padStart(2)}: ${fill.name} -> ${fill.reason} in ${fill.t}s (${fill.picks} picks), ${fill.load} in the bucket; ` +
         `sold ${sell.sold} after ${sell.t}s at (${sell.x}, ${sell.z}); shredded ${now.shredded} (${Math.round((100 * now.shredded) / total)}%), purse ${now.purse}${ok ? '' : '  <-- not a full load sold whole'}`);
@@ -208,5 +213,18 @@ export default async function longRun(t) {
   const minutes = Math.max(1e-6, (final.clock - base.clock) / 60);
   t.log(`live JS heap after GC, MB: ${heap.map((h) => `${h.label} ${(h.used / 1e6).toFixed(2)}`).join(', ')}; ` +
     `from ${base.label} to the end ${((final.used - base.used) / 1e3).toFixed(0)} KB over ${minutes.toFixed(1)} min of game time`);
+  const from = snapshots[`round ${HEAP_EVERY}`], to = snapshots.end;
+  if (from && to) {
+    const grew = (kind) => ({ kind, size: (to[kind]?.size || 0) - (from[kind]?.size || 0), count: (to[kind]?.count || 0) - (from[kind]?.count || 0) });
+    const rows = [...new Set([...Object.keys(from), ...Object.keys(to)])].map(grew);
+    const byType = {};
+    for (const r of rows) {
+      const type = r.kind.split(' ')[0];
+      byType[type] = (byType[type] || 0) + r.size;
+    }
+    const kb = (b) => `${b >= 0 ? '+' : ''}${(b / 1e3).toFixed(1)} KB`;
+    t.log(`heap growth from round ${HEAP_EVERY} to the end by type: ${Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${kb(v)}`).join(', ')}`);
+    t.log(`largest growth by kind: ${rows.sort((a, b) => b.size - a.size).slice(0, 15).map((r) => `${r.kind.trim()} ${kb(r.size)} (${r.count >= 0 ? '+' : ''}${r.count})`).join('; ')}`);
+  }
   t.check(final.used - base.used < HEAP_GROWTH_LIMIT, `the live JS heap did not grow (${((final.used - base.used) / 1e3).toFixed(0)} KB from ${base.label} to the end, limit ${HEAP_GROWTH_LIMIT / 1e3} KB)`);
 }

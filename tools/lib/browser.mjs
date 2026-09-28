@@ -55,7 +55,7 @@ export async function withBrowser(fn, { gpu = false } = {}) {
   }
 }
 
-/** A DevTools connection: send(method, params), evaluate(expression) by value, on(listener). */
+/** A DevTools connection: send(method, params), evaluate(expression) by value, on/off(listener). */
 export async function connect(wsUrl) {
   const ws = new WebSocket(wsUrl);
   await new Promise((ok, err) => { ws.onopen = ok; ws.onerror = err; });
@@ -82,5 +82,6 @@ export async function connect(wsUrl) {
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
     return r.result.value;
   };
-  return { send, evaluate, on: (fn) => listeners.push(fn), close: () => ws.close() };
+  const off = (fn) => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
+  return { send, evaluate, on: (fn) => listeners.push(fn), off, close: () => ws.close() };
 }

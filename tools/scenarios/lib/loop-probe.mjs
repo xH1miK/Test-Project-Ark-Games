@@ -3,8 +3,9 @@
 // the square zone, and all of it at once; throat balls are counted by where the tractor was. Per frame
 // (after lateUpdate, so the views have drawn): every shredded ball paid exactly 2 (purse + coins still
 // in the air = 2 x shredded), the HUD shows the purse, every held ball is exactly one of carried /
-// flying / shredded, flying balls are drawn where the field has them and shredded ones are hidden
-// (every 4th frame); the counter's swell and the rollers are tracked. Allocates nothing per frame, and
+// flying / shredded, flying balls are drawn where the field has them; every 4th frame every ball is
+// drawn where the field has it and the shredded ones are hidden; the counter's swell and the rollers
+// are tracked. Allocates nothing per frame, and
 // keeps at most HAND_IN_LOG hand-ins, so a long run does not grow the heap by itself.
 // `__loopProbe.pauseWhen` (a function) pauses the game after the frame it first returns true.
 
@@ -16,7 +17,7 @@ export const LOOP_PROBE = `(() => {
   const perBall = zm.config.economy.coinsPerBall;
   const p = window.__loopProbe = { frames: 0, handIns: [], handInCount: 0, outOfZone: 0, notWhole: 0, throatOutside: 0, throatInside: 0,
     shreddedEvents: 0, earned: 0, coinsOff: 0, coinsOffAt: null, hudOff: 0, labelOff: 0, stray: 0, strayAt: null,
-    drawnOff: 0, hiddenWrong: 0, maxPunch: 1, maxRoller: 0, rollerTurned: false, maxInFlight: 0, pauseWhen: null, paused: false };
+    drawnOff: 0, syncOff: 0, syncChecks: 0, hiddenWrong: 0, maxPunch: 1, maxRoller: 0, rollerTurned: false, maxInFlight: 0, pauseWhen: null, paused: false };
   zm.events.on('ballsShredded', (e) => { p.shreddedEvents += e.count; });
   zm.events.on('coinsEarned', (e) => { p.earned += e.amount; });
   // Per shredder step: where the tractor's pivot was when a load went or the throat swallowed.
@@ -60,12 +61,18 @@ export const LOOP_PROBE = `(() => {
       p.drawnOff = Math.max(p.drawnOff, Math.abs(drawn.x - b.x[i]), Math.abs(drawn.y - b.y[i]), Math.abs(drawn.z - b.z[i]));
       if (!(drawn.radius > 0)) p.hiddenWrong++;
     }
+    // Every 4th frame all of them: drawn where the field has them (free, carried, flying), shredded hidden.
     if (p.frames % 4 === 0) {
       for (let i = 0; i < b.count; i++) {
-        if (!b.isRemoved(i)) continue;
         view.data.readBall(i, drawn);
-        if (drawn.radius !== 0) p.hiddenWrong++;
+        if (b.isRemoved(i)) {
+          if (drawn.radius !== 0) p.hiddenWrong++;
+          continue;
+        }
+        if (!(drawn.radius > 0)) p.hiddenWrong++;
+        p.syncOff = Math.max(p.syncOff, Math.abs(drawn.x - b.x[i]), Math.abs(drawn.y - b.y[i]), Math.abs(drawn.z - b.z[i]));
       }
+      p.syncChecks++;
     }
     p.maxInFlight = Math.max(p.maxInFlight, sh.inFlight);
     p.maxRoller = Math.max(p.maxRoller, sh.rollerSpeed);
@@ -112,6 +119,7 @@ export async function checkLoopProbe(t, end, listed = 40) {
   t.check(p.stray === 0, `every held ball was exactly one of carried / flying / shredded ${p.strayAt ? JSON.stringify(p.strayAt) : ''}`);
   t.check(end.held === end.bucket + end.inFlight + end.removed && end.removed === end.shredded, `held ${end.held} = ${end.bucket} carried + ${end.inFlight} flying + ${end.removed} shredded`);
   t.check(p.drawnOff < 1e-5 && p.hiddenWrong === 0, `flying balls drawn where the field has them (worst ${p.drawnOff.toExponential(1)}), shredded ones hidden`);
+  t.check(p.syncChecks > 0 && p.syncOff < 1e-5, `every 4th frame all balls drawn where the field has them (${p.syncChecks} frames, worst ${p.syncOff.toExponential(1)})`);
   t.check(p.maxPunch > 1.1, `the counter swelled when coins arrived (max scale ${p.maxPunch.toFixed(3)})`);
   t.check(p.maxRoller === 1 && p.rollerTurned, 'the rollers spun up to full speed while grinding');
   return p;
