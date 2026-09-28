@@ -1,8 +1,9 @@
 /**
  * The shredder, where balls become coins. Pure TypeScript: no engine imports.
  *
- * Hand-in: while the tractor's pivot is inside the square zone around the shredder, the bucket hands
- * over its whole load at once and every ball flies into the shredder in an arc. Throat: free balls
+ * Hand-in: while the tractor's body (the centre of its collision circle: the part that gets close to
+ * the shredder, whatever the tier's length) is inside the square zone around the shredder, the bucket
+ * hands over its whole load at once and every ball flies into the shredder in an arc. Throat: free balls
  * shoved into the box around the shredder go down into its mouth as well. Every ball pays when it
  * lands inside (`ballsShredded`, `coinsEarned` at the shredder's top, coins per ball); the purse is
  * credited later, when the coins arrive (CoinFlights). The rollers turn while the shredder is fed.
@@ -15,7 +16,7 @@ import { BallFlights } from '../balls/BallFlights';
 import type { FlightField } from '../balls/BallFlights';
 
 export interface ShredderSettings {
-  /** Half size of the square hand-in zone (world axes) the visitor's pivot has to be in. */
+  /** Half size of the square hand-in zone (world axes) the visitor's body has to be in. */
   readonly zoneHalf: number;
   /** The load's flight: seconds (× 1 .. 1 + stagger), hop, aim above the pivot, scatter (world X/Z). */
   readonly handIn: { readonly time: number; readonly stagger: number; readonly arc: number; readonly aimHeight: number; readonly spread: number };
@@ -45,10 +46,13 @@ export interface ShredderLoad {
   unloadAll(out: Int32Array): number;
 }
 
-/** Who brings the load (the tractor): its pivot on the ground. */
+/**
+ * Who brings the load (the tractor): the centre of its body circle on the ground. A long machine's
+ * pivot stays far from the shredder it bumps into; its body centre gets as close as its radius allows.
+ */
 export interface ShredderVisitor {
-  readonly x: number;
-  readonly z: number;
+  readonly bodyX: number;
+  readonly bodyZ: number;
 }
 
 /** The ball field as the shredder sees it. */
@@ -108,10 +112,10 @@ export class Shredder {
     this.handedOver = new Int32Array(field.capacity);
   }
 
-  /** True while the visitor's pivot is inside the hand-in zone. */
+  /** True while the visitor's body is inside the hand-in zone. */
   get inZone(): boolean {
     const half = this.settings.zoneHalf;
-    return Math.abs(this.visitor.x - this.pose.x) <= half && Math.abs(this.visitor.z - this.pose.z) <= half;
+    return Math.abs(this.visitor.bodyX - this.pose.x) <= half && Math.abs(this.visitor.bodyZ - this.pose.z) <= half;
   }
 
   /** Balls in the air on their way in. */

@@ -15,7 +15,7 @@ import { Shredder } from '../../assets/scripts/economy/Shredder.ts';
 import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
-import { PHASES, pickFillTarget, roundLegs, sweepFrame } from '../scenarios/lib/sweep.mjs';
+import { PHASES, pickFillTarget, roundLegs, sweepFrame, upgradeLegs } from '../scenarios/lib/sweep.mjs';
 
 /** The bucket's settings the way GameRoot builds them. */
 export const BUCKET_SETTINGS = { ...Config.bucket, radius: Config.balls.radius, gravity: Config.balls.gravity };
@@ -31,6 +31,22 @@ export const SHREDDER_POSE = (() => {
   const s = LEVEL.spots.shredder;
   return { x: s.x, y: s.y, z: s.z, yaw: (s.yaw * Math.PI) / 180 };
 })();
+
+/**
+ * How far a carried ball's centre (x, y, z in the bucket's axes) is outside the cavity of shape `s`
+ * (negative inside): under the floor, past a side wall, the back or the lip, or into the rounded edge
+ * between the floor and the back. The heap above the rim is not limited here.
+ */
+export function cavityBreach(s, r, x, y, z) {
+  let out = Math.max(s.floor + r - y, Math.abs(x) - (s.halfX - r), s.minZ + r - z, z - (s.maxZ - r));
+  const round = s.backRound ?? 0;
+  if (round > r) {
+    const dz = z - (s.minZ + round);
+    const dy = y - (s.floor + round);
+    if (dz < 0 && dy < 0) out = Math.max(out, Math.hypot(dz, dy) - (round - r));
+  }
+  return out;
+}
 
 /** A pad's plate grown by the clear margin: the zone balls are kept off (as GameRoot builds it). */
 export const clearRect = (plate, margin = Config.pads.clearMargin) =>
@@ -62,10 +78,11 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
   const centres = carpet ? layCarpet(carpetSpec, ballSettings.radius, ballSettings.maxCount, grid) : new Float64Array(0);
   const balls = new BallField(ballSettings, Math.max(64, centres.length / 2 + 64), grid);
   for (let k = 0; k < centres.length; k += 2) balls.add(centres[k], ballSettings.radius, centres[k + 1]);
-  const tractor = new TractorModel(Config.tractor, Config.tractor.tiers[tier], grid);
+  const bus = events ?? (shredder ? new EventBus() : null);
+  const tractor = new TractorModel(Config.tractor, Config.tractor.tiers, grid, bus);
+  tractor.setTier(tier + 1);
   const start = LEVEL.spots.tractorStart;
   tractor.place(start.x, start.z, (start.yaw * Math.PI) / 180);
-  const bus = events ?? (shredder ? new EventBus() : null);
   const scoop = bucket ? new Bucket({ ...BUCKET_SETTINGS, radius: ballSettings.radius, gravity: ballSettings.gravity }, balls, tractor, BUCKET_SLOTS, bus) : null;
   const world = { grid, balls, tractor, bucket: scoop, settings: ballSettings, events: bus, shredder: null, purse: null, coins: null, pads: null, progression: null };
   if (shredder) {
@@ -84,7 +101,7 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
     balls.addClearZone(upgrade.clearZone);
     balls.addClearZone(gate.clearZone);
     world.pads = { upgrade, gate };
-    world.progression = new Progression(Config.pads, upgrade, gate, balls, bus);
+    world.progression = new Progression(Config.pads, upgrade, gate, balls, tractor, bus);
   }
   return world;
 }
@@ -253,8 +270,7 @@ export function measureLoad(world) {
   let notHeld = 0;
   for (let k = 0; k < load.count; k++) {
     const x = load.x[k], y = load.y[k], z = load.z[k];
-    const breach = Math.max(s.floor + r - y, Math.abs(x) - (s.halfX - r), s.minZ + r - z, z - (s.maxZ - r));
-    outside = Math.max(outside, breach - load.slack[k]);
+    outside = Math.max(outside, cavityBreach(s, r, x, y, z) - load.slack[k]);
     lowest = Math.min(lowest, y + load.slack[k]);
     for (let j = k + 1; j < load.count; j++) overlap = Math.max(overlap, 2 * r - Math.hypot(load.x[j] - x, load.y[j] - y, load.z[j] - z));
     const i = load.index[k];
@@ -302,7 +318,7 @@ export function driveLegs(world, legs, nextDt, { targets = {}, until = {} } = {}
   const results = [];
   for (const leg of legs) {
     if (leg.kind === 'tier') {
-      tractor.setTier(Config.tractor.tiers[leg.index]);
+      tractor.setTier(leg.index + 1);
       continue;
     }
     const radius = leg.radius || 1;
@@ -385,15 +401,21 @@ export function driveLegs(world, legs, nextDt, { targets = {}, until = {} } = {}
 }
 
 /**
- * The browser `long-run` scenario on the pure models (tools/scenarios/lib/sweep.mjs): per phase the
- * tractor's tier, then rounds of a fill-up near the next tour point and a hand-in at the shredder
- * until the phase's share of the carpet is shredded. The world needs the shredder. `nextDt()` gives
- * each frame's time; `onRound(round)` sees every round as it ends. Returns the rounds:
- * { phase, round, fill, sell (leg results), filled (balls when the fill-up ended), sold (the hand-in
- * as the pivot entered the zone) }.
+ * The browser `long-run` scenario on the pure models (tools/scenarios/lib/sweep.mjs): rounds of a
+ * fill-up near the next tour point and a hand-in at the shredder until the phase's share of the
+ * carpet is shredded, a phase per tier. Tier 2 is bought on the upgrade pad, usually on the way (the
+ * tier-1 phase ends then), else by driving onto it before the tier-2 phase. The world needs the
+ * shredder and the pads. `nextDt()` gives each frame's time; `onRound(round)` sees every round as it
+ * ends. Returns the rounds: { phase, round, fill, sell (leg results), filled (balls when the fill-up
+ * ended), capacity (the bucket's then), sold (the hand-in as the body entered the zone) } and, as
+ * `rounds.upgrade`, how tier 2 came: { round (the first round on tier 2), onTheWay, legs }.
  */
 export function longRun(world, nextDt, onRound) {
-  const { balls, bucket, shredder, tractor } = world;
+  const { balls, bucket, shredder, tractor, pads } = world;
+  const until = { upgraded: () => tractor.tier >= 2 };
+  let round = 0;
+  let upgradedIn = -1;
+  world.events.on('tierChanged', () => { if (upgradedIn < 0) upgradedIn = round; });
   const frameOptions = sweepFrame(SHREDDER_POSE, Config.shredder.zoneHalf);
   const tabu = [];
   const targets = {
@@ -403,20 +425,26 @@ export function longRun(world, nextDt, onRound) {
     },
   };
   const rounds = [];
-  let round = 0;
   for (const [phase, { tier, share, maxRounds }] of PHASES.entries()) {
-    tractor.setTier(Config.tractor.tiers[tier]);
+    if (tractor.tier < tier + 1) {
+      const legs = driveLegs(world, upgradeLegs(tractor, SHREDDER_POSE, pads.upgrade), nextDt, { until });
+      rounds.upgrade = { round, onTheWay: false, legs };
+    }
     for (let k = 0; k < maxRounds && shredder.shredded + shredder.inFlight < share * balls.count; k++, round++) {
-      const [fillLeg, sellLeg] = roundLegs(round, tier, SHREDDER_POSE);
-      const [fill] = driveLegs(world, [fillLeg], nextDt, { targets });
+      // A phase ends when the tractor has moved on to another tier (bought on the way).
+      if (phase < PHASES.length - 1 && tractor.tier !== tier + 1) break;
+      const [fillLeg, sellLeg] = roundLegs(round, tractor.tier - 1, SHREDDER_POSE);
+      const [fill] = driveLegs(world, [fillLeg], nextDt, { targets, until });
       const filled = bucket.count;
+      const capacity = tractor.bucketCapacity;
       const handed = shredder.handedIn;
-      const [sell] = driveLegs(world, [sellLeg], nextDt);
-      const entry = { phase, round, fill, sell, filled, sold: shredder.handedIn - handed };
+      const [sell] = driveLegs(world, [sellLeg], nextDt, { until });
+      const entry = { phase, round, fill, sell, filled, capacity, sold: shredder.handedIn - handed };
       rounds.push(entry);
       onRound?.(entry);
     }
   }
+  rounds.upgrade ??= { round: upgradedIn + 1, onTheWay: true, legs: [] };
   return rounds;
 }
 

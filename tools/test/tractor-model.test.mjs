@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Config } from '../../assets/scripts/core/Config.ts';
+import { EventBus } from '../../assets/scripts/core/Events.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
 
-const SETTINGS = { turnSpeed: 240, accel: 14, brake: 22, collisionPasses: 2, maxStep: 1 / 30 };
+const SETTINGS = { turnSpeed: 240, accel: 14, brake: 22, collisionPasses: 2, maxStep: 1 / 30, swell: { time: 0.35 } };
 const T1 = { speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55 };
 const T2 = { speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0 };
+const TIERS = [T1, T2];
 const BOUNDS = { minX: -30, maxX: 30, minZ: -30, maxZ: 30 };
 const DEG = Math.PI / 180;
 const near = (actual, expected, eps = 1e-9) =>
@@ -15,7 +17,7 @@ const near = (actual, expected, eps = 1e-9) =>
 const make = (...boxes) => {
   const grid = new ObstacleGrid(BOUNDS, 1);
   for (const b of boxes) grid.add({ kind: 'box', angle: 0, ...b });
-  const tractor = new TractorModel(SETTINGS, T1, grid);
+  const tractor = new TractorModel(SETTINGS, TIERS, grid);
   tractor.place(0, 0, 0);
   return { tractor, grid };
 };
@@ -130,11 +132,12 @@ test('the real south-east corner of the arena: penetration under 0.05 at any FPS
     { x: 18.4056, z: 22.7288, halfX: 2.8663, halfZ: 3.4413, angle: -1.40242 },
     { x: 21.2035, z: 20.3849, halfX: 3.5562, halfZ: 4.2696, angle: -0.05194 },
   ];
-  for (const tier of Config.tractor.tiers) {
+  for (const [index, tier] of Config.tractor.tiers.entries()) {
     for (const fps of [60, 7, 4]) {
       const grid = new ObstacleGrid(Config.world.bounds, Config.world.cellSize);
       for (const box of corner) grid.add({ kind: 'box', ...box });
-      const tractor = new TractorModel(Config.tractor, tier, grid);
+      const tractor = new TractorModel(Config.tractor, Config.tractor.tiers, grid);
+      tractor.setTier(index + 1);
       tractor.place(10.85, 12.07, Math.PI / 4);
       let worst = 0;
       for (let i = 0; i < fps * 3; i++) {
@@ -177,11 +180,33 @@ test('odometer counts the distance driven', () => {
 
 test('setTier switches top speed and body radius', () => {
   const { tractor } = make();
-  tractor.setTier(T2);
+  assert.equal(tractor.tier, 1);
+  tractor.setTier(2);
+  assert.equal(tractor.tier, 2);
   assert.equal(tractor.topSpeed, 8.4);
   assert.equal(tractor.bodyRadius, 1.8);
   run(tractor, 1, 0, 1);
   near(tractor.speed, 8.4);
+});
+
+test('setTier is 1-based and clamped, keeps the pose and speed, and announces tierChanged once per change', () => {
+  const events = new EventBus();
+  const heard = [];
+  events.on('tierChanged', ({ tier }) => heard.push(tier));
+  const tractor = new TractorModel(SETTINGS, TIERS, new ObstacleGrid(BOUNDS, 1), events);
+  tractor.place(1, 2, 0.5);
+  run(tractor, 0.5, 0, 1);
+  const { x, z, yaw, speed } = tractor;
+  assert.equal(tractor.maxTier, 2);
+  assert.equal(tractor.setTier(1), false, 'already tier 1');
+  assert.equal(tractor.setTier(2), true);
+  assert.deepEqual([tractor.x, tractor.z, tractor.yaw, tractor.speed], [x, z, yaw, speed]);
+  assert.equal(tractor.setTier(2), false);
+  assert.equal(tractor.setTier(3), false, 'no tier 3: clamped to 2, no change');
+  assert.equal(tractor.tier, 2);
+  assert.equal(tractor.setTier(0), true, 'clamped to 1');
+  assert.equal(tractor.tier, 1);
+  assert.deepEqual(heard, [2, 1]);
 });
 
 test('place resets speed and wraps the heading', () => {

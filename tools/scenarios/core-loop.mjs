@@ -2,7 +2,7 @@
 // purse and the HUD. Watched on every frame and shredder step (lib/loop-probe.mjs): every shredded
 // ball paid exactly 2 (purse + coins still in the air = 2 x shredded), the HUD shows the purse, every
 // held ball is exactly one of carried / flying / shredded, flying balls are drawn where the field has
-// them and shredded ones are hidden; a load is taken only while the tractor's pivot is in the square
+// them and shredded ones are hidden; a load is taken only while the tractor's body is in the square
 // zone, and all of it at once; balls the throat swallows while the tractor is still outside the zone
 // were shoved there. Legs: fill 8 -> into the zone -> coins arrive (HUD shot) -> with a full bucket
 // at the shredder from the east through the carpet (the berm feeds the throat, then the load goes) ->
@@ -61,7 +61,7 @@ const TO_SHREDDER = [
   { name: 'to the shredder: stop', kind: 'stop', time: 0.3 },
 ];
 // Refill south-east of the shredder, round to its east side, then straight at it through the carpet:
-// the full bucket shoves a berm into the throat before the pivot reaches the zone.
+// the full bucket shoves a berm into the throat before the body reaches the zone.
 const SHOVE = [
   { name: 'shove: refill south-east', kind: 'goto', x: 11, z: -8 },
   { name: 'shove: east of the shredder', kind: 'goto', x: 12, z: -1.9, radius: 0.5 },
@@ -149,7 +149,7 @@ export default async function coreLoop(t) {
   const s2 = await settleCoins('first load');
   const p2 = await probe();
   const first = p2.handIns[0];
-  t.log(`first hand-in: ${first ? `${first.count} of ${first.load} at pivot offset (${first.dx}, ${first.dz})` : 'none'}; ` +
+  t.log(`first hand-in: ${first ? `${first.count} of ${first.load} at body offset (${first.dx}, ${first.dz})` : 'none'}; ` +
     `then ${s2.handed - (first ? first.count : 0)} more scooped in the zone, ${s2.swallowed} by the throat; purse ${s2.purse}, HUD ${s2.shown}; up to ${p2.maxInFlight} balls in the air`);
   t.check(first && first.count === 8 && first.left === 0, 'the whole load of 8 went in one step');
   t.check(s2.purse + s2.pads === 2 * s2.shredded && s2.shredded === s2.handed + s2.swallowed && s2.purse >= 16,

@@ -8,7 +8,8 @@
 // again whenever a point is reached, passed or brings no headway for `stall` s (default 1.5; that
 // point is handed back as `stalled`), the leg ends 'none left' on null. A scenario's own probes can
 // raise `__ap.legWorst`, which is reported per leg. A leg's result also says how many balls the
-// bucket held when it ended (`load`) and how many the shredder took from it during the leg (`sold`).
+// bucket held when it ended (`load`) and could hold then (`capacity`: the tractor's tier can change on
+// the way), and how many the shredder took from it during the leg (`sold`).
 // Needs the ?qa hooks (window.__zm).
 // tools/test/ball-world.mjs `driveLegs` runs the same legs on the pure models in Node.
 
@@ -35,7 +36,7 @@ export const AUTOPILOT = `(() => {
     const leg = ap.legs[ap.i], tr = zm.tractor;
     ap.results.push({ name: leg.name, ok, reason, x: +tr.x.toFixed(2), z: +tr.z.toFixed(2), t: +ap.t.toFixed(2),
       moved: +(tr.odometer - leg.odo0).toFixed(2), worst: +ap.legWorst.toFixed(4), picks: leg.picks,
-      load: zm.bucket.count, sold: zm.shredder.handedIn - leg.handed0 });
+      load: zm.bucket.count, capacity: zm.tractor.bucketCapacity, sold: zm.shredder.handedIn - leg.handed0 });
     ap.i++; ap.t = 0; ap.legWorst = 0;
     if (ap.i >= ap.legs.length) { ap.running = false; zm.input.release(); } else begin();
   };

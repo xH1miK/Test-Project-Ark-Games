@@ -177,15 +177,23 @@ test('pad: its plate is a clear zone only while it takes coins', () => {
   assert.equal(padWorld({ plate: null }).pad.clearZone.active, false, 'no plate, no zone');
 });
 
-test('progression: the upgrade pad hides until the first hand-in, then pops up once and throws the balls clear', () => {
+test('progression: the upgrade pad hides until the first hand-in, pops up once and throws the balls clear; bought, it closes and the machine goes up a tier', () => {
   const events = new EventBus();
   const purse = new Purse(events);
-  const tractor = { x: 100, z: 100 };
+  const tiers = [];
+  events.on('tierChanged', ({ tier }) => tiers.push(tier));
+  // The visitor and the machine the upgrade buys (the tractor), as the Upgradable contract says.
+  const tractor = { x: 100, z: 100, tier: 1, setTier(n) {
+    if (n < 1 || n > 2 || n === this.tier) return false;
+    this.tier = n;
+    events.emit('tierChanged', { tier: n });
+    return true;
+  } };
   const make = (id, x, z, price) => new PayPad(id, PADS, { x, y: 0.02, z }, price, purse, tractor, FX, events);
   const upgrade = make('upgrade', 5.65, 2.33, Config.economy.upgradePrice);
   const gate = make('gate', 1.3, -12.2, Config.economy.gatePrice);
   const bursts = [];
-  const progression = new Progression(PADS, upgrade, gate, { burst: (...args) => bursts.push(args) }, events);
+  const progression = new Progression(PADS, upgrade, gate, { burst: (...args) => bursts.push(args) }, tractor, events);
   assert.equal(upgrade.shown, false);
   assert.equal(gate.shown, true);
   events.emit('ballsShredded', { count: 3 }); // balls shoved into the throat are not a hand-in
@@ -200,14 +208,18 @@ test('progression: the upgrade pad hides until the first hand-in, then pops up o
   purse.add(1000);
   tractor.x = upgrade.x;
   tractor.z = upgrade.z;
+  assert.equal(tractor.tier, 1, 'not before it is paid');
   for (let k = 0; k < 180; k++) progression.step(1 / 60);
   assert.ok(upgrade.paid && upgrade.closed);
   assert.equal(purse.total, 900);
+  assert.equal(tractor.tier, 2, 'the upgrade bought tier 2');
+  assert.deepEqual(tiers, [2], 'once');
   tractor.x = gate.x;
   tractor.z = gate.z;
   for (let k = 0; k < 180; k++) progression.step(1 / 60);
   assert.ok(gate.paid);
   assert.equal(purse.total, 600);
+  assert.equal(tractor.tier, 2, 'the gate buys no tier');
 });
 
 /** Free balls with centres in a rectangle. */
@@ -216,7 +228,9 @@ const ballsIn = (balls, r) => { let n = 0; for (let i = 0; i < balls.count; i++)
 test('the real arena at 60 and 10 fps: sell, the upgrade pad pops up clear, a partial payment stays, the rest, MAX; the ledger every frame', () => {
   for (const fps of [60, 10]) {
     const world = makeWorld({ shredder: true, pads: true });
-    const { balls, purse, coins, shredder, pads } = world;
+    const { balls, purse, coins, shredder, pads, tractor } = world;
+    const spent = { upgrade: 0, gate: 0 };
+    world.events.on('coinsSpent', ({ padId, amount }) => { spent[padId] += amount; });
     let granted = 0;
     const setPurse = (total) => {
       const diff = total - purse.total;
@@ -260,7 +274,10 @@ test('the real arena at 60 and 10 fps: sell, the upgrade pad pops up clear, a pa
     setPurse(150);
     drive([{ kind: 'goto', x: 5, z: 2.5, radius: 0.4 }, { kind: 'stop', time: 3 }]);
     assert.ok(pads.upgrade.paid && pads.upgrade.closed, 'paid and closed');
-    assert.equal(purse.total, 150 - (100 - partial), 'took exactly what was owed');
+    // The purse also gets what the throat swallows: T2 appears on the pad next to the shredder and its
+    // bigger body shoves balls in. What the pad took is counted by its own events.
+    assert.equal(spent.upgrade, 100, 'the pad took exactly its price from the purse, over both visits');
+    assert.equal(tractor.tier, 2, 'the upgrade bought tier 2');
     assert.equal(pads.upgrade.clearZone.active, false);
     assert.equal(worst, 0, `purse + coins in the air + on the pads = 2 x shredded + granted, every frame (${fps} fps)`);
   }

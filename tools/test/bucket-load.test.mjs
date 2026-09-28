@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Config } from '../../assets/scripts/core/Config.ts';
 import { BucketLoad } from '../../assets/scripts/tractor/BucketLoad.ts';
 import { mulberry32 } from '../../assets/scripts/balls/BallCarpet.ts';
-import { BUCKET_SETTINGS, BUCKET_SLOTS } from './ball-world.mjs';
+import { BUCKET_SETTINGS, BUCKET_SLOTS, cavityBreach } from './ball-world.mjs';
 
 const R = Config.balls.radius;
 const [T1, T2] = Config.tractor.tiers;
@@ -16,7 +16,7 @@ const check = (load) => {
   let outside = 0;
   let overlap = 0;
   for (let k = 0; k < load.count; k++) {
-    outside = Math.max(outside, s.floor + R - load.y[k], Math.abs(load.x[k]) - (s.halfX - R), s.minZ + R - load.z[k], load.z[k] - (s.maxZ - R));
+    outside = Math.max(outside, cavityBreach(s, R, load.x[k], load.y[k], load.z[k]));
     for (let j = k + 1; j < load.count; j++) {
       overlap = Math.max(overlap, 2 * R - Math.hypot(load.x[j] - load.x[k], load.y[j] - load.y[k], load.z[j] - load.z[k]));
     }
@@ -119,9 +119,56 @@ test('T2 holds 60: the heap narrows into a mound above the rim and sleeps', () =
     const narrow = Config.bucket.heapSlope * over;
     assert.ok(Math.abs(load.x[k]) <= Math.max(0, s.halfX - R - narrow) + 1e-9, `ball ${k} at y ${load.y[k].toFixed(2)} x ${load.x[k].toFixed(2)}`);
   }
-  // The example's cavity (Tractor2 is not in yet; its bucket gets measured with the model).
+  // The cavity measured on Tractor2's mesh: a mound at most a layer over the heap's top, and the
+  // floor layer fills the rounded back corner (balls down there keep off the curve).
   const top = Math.max(...load.y.subarray(0, load.count));
   assert.ok(top < heapTop + 2 * R, `the mound tops out at ${top.toFixed(2)} (heap top ${heapTop.toFixed(2)})`);
+  // The back fills up: the floor row lies against the curve, the balls above the rounding against the wall.
+  const curveStop = s.minZ + s.backRound;
+  let onCurve = 0;
+  let onWall = 0;
+  for (let k = 0; k < load.count; k++) {
+    if (load.y[k] < s.floor + R + 0.05 && load.z[k] < curveStop + 0.1) onCurve++;
+    if (load.y[k] > s.floor + s.backRound && load.z[k] < s.minZ + R + 0.05) onWall++;
+  }
+  assert.ok(onCurve >= 3 && onWall >= 3, `${onCurve} floor balls against the curve, ${onWall} against the wall above it`);
+  console.log(`T2 load of 60: top centre ${top.toFixed(2)}, heap top ${heapTop.toFixed(2)}, ${onCurve} floor balls against the curve, ${onWall} against the wall above, asleep after ${took.toFixed(2)} s, worst overlap ${overlap.toFixed(3)}`);
+});
+
+test('the rounded back corner: balls thrown back stop against it (a floor ball off the curve, one higher up at the wall plane), no bounce', () => {
+  const s = T2.bucket;
+  assert.ok(s.backRound > R, 'T2 has a rounded corner');
+  const axisZ = s.minZ + s.backRound;
+  const axisY = s.floor + s.backRound;
+  // Without gravity a ball keeps its height: one on the floor, one above the rounding, both thrown back.
+  const flat = new BucketLoad({ ...BUCKET_SETTINGS, gravity: 0 }, BUCKET_SLOTS, s, T2.bucketCapacity);
+  flat.take(0, 0, s.floor + R, s.maxZ - R, 0, 0, -7.6);
+  flat.take(1, 1, axisY + 0.2, s.maxZ - R, 0, 0, -7.6);
+  for (let f = 0; f < 60; f++) flat.step(1 / 60);
+  assert.ok(Math.abs(flat.y[0] - (s.floor + R)) < 1e-9, `floor ball at y ${flat.y[0]}`);
+  assert.ok(Math.abs(flat.z[0] - axisZ) < 1e-9, `floor ball at z ${flat.z[0].toFixed(4)}, the curve lets it to ${axisZ.toFixed(4)}`);
+  assert.ok(Math.abs(flat.y[1] - (axisY + 0.2)) < 1e-9 && Math.abs(flat.z[1] - (s.minZ + R)) < 1e-9, `upper ball at y ${flat.y[1].toFixed(3)} z ${flat.z[1].toFixed(4)}, the wall plane lets it to ${(s.minZ + R).toFixed(4)}`);
+  // With gravity, a ball scooped at T2 speed rolls back into the corner and stays there.
+  const load = new BucketLoad(BUCKET_SETTINGS, BUCKET_SLOTS, s, T2.bucketCapacity);
+  load.take(0, 0, s.floor + R, s.maxZ - R, 0, 0, -0.9 * T2.speed);
+  let farthest = Infinity;
+  let after = -Infinity;
+  for (let f = 0; f < 120; f++) {
+    load.step(1 / 60);
+    farthest = Math.min(farthest, load.z[0]);
+    if (f > 30) after = Math.max(after, load.z[0]);
+  }
+  assert.ok(Math.abs(farthest - axisZ) < 1e-9, `went back to z ${farthest.toFixed(4)}`);
+  assert.ok(after < axisZ + 1e-9, `and stayed in the corner (at most z ${after.toFixed(4)} later)`);
+  assert.ok(check(load).outside < 1e-9);
+  // A ball scooped inside the rounding (the intake is a box) is drawn out of it, not snapped.
+  const drawn = new BucketLoad(BUCKET_SETTINGS, BUCKET_SLOTS, s, T2.bucketCapacity);
+  drawn.take(0, 0, s.floor + R, s.minZ + R, 0, 0, 0);
+  const deep = cavityBreach(s, R, 0, s.floor + R, s.minZ + R);
+  assert.ok(deep > 0.1, `the box corner is ${deep.toFixed(3)} into the rounding`);
+  drawn.step(1 / 60);
+  const first = deep - cavityBreach(s, R, drawn.x[0], drawn.y[0], drawn.z[0]);
+  assert.ok(first > 0 && first <= Config.bucket.drawIn / 60 + 1e-9, `first step moved it out by ${first}`);
 });
 
 test('setShape (upgrade): the pile keeps its balls, stretched into the new bucket, and settles there', () => {

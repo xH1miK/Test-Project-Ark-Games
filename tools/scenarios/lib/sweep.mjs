@@ -8,11 +8,33 @@
 /** Points the rounds fill up near, in turn (world XZ): corners and sides of the carpet, crossing the field. */
 export const TOUR = [[-2, 12], [12, -9], [12, 12], [-1, -10], [5, 13], [-2.5, -2], [12.5, 3], [5, 7]];
 
-/** Tier-1 rounds until 35% of the carpet is shredded, then tier-2 rounds (60 a load) until 70%. */
+/**
+ * Tier-1 rounds until 35% of the carpet is shredded, then tier-2 rounds (60 a load) until 70%. Tier 2
+ * is bought on the upgrade pad: the tour crosses it, so it is usually bought on the way once the purse
+ * holds the price (the tier-1 phase then ends early, a round can change tier half way); if not, the
+ * tractor drives onto the pad before the tier-2 phase (upgradeLegs).
+ */
 export const PHASES = [
   { name: 'T1', tier: 0, share: 0.35, maxRounds: 45 },
-  { name: 'T2', tier: 1, share: 0.7, maxRounds: 14 },
+  { name: 'T2', tier: 1, share: 0.7, maxRounds: 24 },
 ];
+
+/**
+ * Legs from `from` onto the upgrade pad (it stands north of the shredder): round the shredder on the
+ * tractor's side if it is south of it, then onto the pad and stand there until the tier is bought
+ * (the condition `upgraded`, which the scenario registers).
+ */
+export function upgradeLegs(from, shredder, pad) {
+  const legs = [];
+  if (from.z < shredder.z + 1.5) {
+    const side = from.x >= shredder.x ? shredder.x + 4.5 : shredder.x - 4.5;
+    legs.push({ name: 'upgrade: round the shredder', kind: 'goto', x: side, z: from.z, radius: 0.8 });
+    legs.push({ name: 'upgrade: north of it', kind: 'goto', x: side, z: pad.z, radius: 0.8 });
+  }
+  legs.push({ name: 'upgrade: onto the pad', kind: 'goto', x: pad.x, z: pad.z, radius: 0.5 });
+  legs.push({ name: 'upgrade: stand until bought', kind: 'stop', time: 4, until: 'upgraded', timeout: 10 });
+  return legs;
+}
 
 /** Where balls are counted (world XZ): the arena inside its rocks. */
 export const SWEEP_AREA = { minX: -7, maxX: 17, minZ: -23, maxZ: 20 };
