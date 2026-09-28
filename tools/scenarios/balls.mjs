@@ -1,7 +1,8 @@
 // Ball check (M3 simulation + M4 rendering). The carpet is laid and sleeps untouched; the tractor
-// ploughs through it by autopilot (tier 1, then the tier 2 boxes and speed); no ball ever ends a frame
-// inside a rock or outside the field; the carpet falls asleep again once the tractor stops; the time
-// of the ball step is measured per frame in the browser.
+// ploughs through it by autopilot (tier 1, then the tier 2 boxes and speed); no free ball ever ends a
+// frame inside a rock or outside the field (the balls the bucket scoops are audited by the scoop
+// scenario; here they are only counted); the carpet falls asleep again once the tractor stops; the
+// time of the ball step is measured per frame in the browser.
 // Rendering: the balls are one render model with one pass (exactly +1 draw call); after every frame
 // the vertex data shows every ball where the field has it (only moved balls are rewritten, so a missed
 // one would show); an asleep carpet uploads nothing; balls that rolled turned and the others did not;
@@ -12,6 +13,7 @@
 //   ZM_BALL_OVERLAY=1 ... paints the balls over the game as circles, orange = simulated (debug)
 
 import { installAutopilot, runLegs } from './lib/autopilot.mjs';
+import { FPS, RELEASE_CAMERA, freezeCamera } from './lib/camera.mjs';
 import { pixelDiff, readPng } from './lib/png.mjs';
 import { checkUiOnTop } from './lib/ui-layers.mjs';
 
@@ -97,13 +99,14 @@ const AUDIT = `(() => {
     for (let i = 0; i < b.count; i++) {
       const x = b.x[i], y = b.y[i], z = b.z[i];
       if (!Number.isFinite(x + y + z)) { nan++; continue; }
+      if (b.isHeld(i)) continue; // carried: the bucket's (the scoop scenario audits the load)
       const d = g.resolveCircle(x, z, r, 2, tmp);
       if (d > 1e-6) inRock++;
       if (d > deepest) deepest = d;
       if (!inArena(x, z) || y < r - 1e-6) outside++;
       if (y > highest) highest = y;
     }
-    return { count: b.count, inRock, deepest, outside, nan, highest, simulated: b.simulatedCount, hotCells: b.hotCellCount };
+    return { count: b.count, held: b.heldCount, inRock, deepest, outside, nan, highest, simulated: b.simulatedCount, hotCells: b.hotCellCount };
   };
   return 'installed';
 })()`;
@@ -132,12 +135,6 @@ const OVERLAY = `(() => {
   return order.length;
 })()`;
 const HIDE_OVERLAY = `(() => { const cv = document.getElementById('ball-overlay'); if (cv) cv.style.display = 'none'; })()`;
-
-/** Freezes the camera rig on a ground point (the rig stops following the tractor); fov optional. */
-const freezeCamera = (x, z, fov = 45) => `(() => { const c = __zm.camera; c.update = () => {}; c.snap(${x}, 0, ${z});
-  cc.find('Main Camera').getComponent(cc.js.getClassByName('cc.Camera')).fov = ${fov}; })()`;
-const RELEASE_CAMERA = `(() => { const c = __zm.camera, tr = __zm.tractor; delete c.update; c.snap(tr.x, 0, tr.z);
-  cc.find('Main Camera').getComponent(cc.js.getClassByName('cc.Camera')).fov = 45; })()`;
 
 // Through the thick of the carpet from TractorStart (9, -11); the start hole has no balls.
 const ROUTE_T1 = [
@@ -168,9 +165,6 @@ const stats = (values) => {
   const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0;
   return { mean: values.reduce((s, v) => s + v, 0) / Math.max(1, values.length), p95: at(0.95), max: at(1) };
 };
-
-const FPS = (ms) => `new Promise((ok) => { const d = cc.director, f0 = d.getTotalFrames(), t0 = performance.now();
-  setTimeout(() => ok((d.getTotalFrames() - f0) * 1000 / (performance.now() - t0)), ${ms}); })`;
 
 /** Draw calls of the last frame with the ball renderer on and off; the render model's shape. */
 async function checkDrawCalls(t) {
@@ -300,7 +294,7 @@ export default async function balls(t) {
   const laid = await audit();
   t.log(`carpet: ${laid.count} balls, ${laid.simulated} simulated, highest y ${laid.highest.toFixed(3)}`);
   t.check(laid.count > 1400 && laid.count <= 1600, `carpet laid (${laid.count} balls)`);
-  t.check(laid.inRock === 0 && laid.outside === 0 && laid.nan === 0, 'no ball in a rock or outside the field at start');
+  t.check(laid.inRock === 0 && laid.outside === 0 && laid.nan === 0 && laid.held === 0, 'no ball in a rock, outside the field or in the bucket at start');
   t.check(laid.simulated === 0, 'the untouched carpet sleeps (no ball simulated)');
   const sync0 = await t.evaluate('__ballSync()');
   t.check(sync0.worst < SYNC_TOLERANCE && sync0.hidden === 0, `every ball is drawn where the field has it at start (worst ${sync0.worst.toExponential(1)})`);
@@ -315,7 +309,8 @@ export default async function balls(t) {
 
   // 2. Rolling close-up: the same patch before and after a short push; pushed balls turned, others did not.
   const spinSnap = `(() => { const d = __zm.ballView.data, b = __zm.balls;
-    return { spin: Array.from(d.spin.subarray(0, 4 * b.count)), x: Array.from(b.x.subarray(0, b.count)), z: Array.from(b.z.subarray(0, b.count)) }; })()`;
+    return { spin: Array.from(d.spin.subarray(0, 4 * b.count)), x: Array.from(b.x.subarray(0, b.count)), z: Array.from(b.z.subarray(0, b.count)),
+      held: Array.from({ length: b.count }, (_, i) => b.isHeld(i)) }; })()`;
   await runLegs(t, 'roll', ROLL_PUSH.slice(0, 1));
   const before = await t.evaluate(spinSnap);
   await t.evaluate(freezeCamera(3.6, -11, 10)); // just ahead of where the bucket stops
@@ -328,6 +323,7 @@ export default async function balls(t) {
   const after = await t.evaluate(spinSnap);
   let rolled = 0, rolledTurned = 0, still = 0, stillTurned = 0;
   for (let i = 0; i < before.x.length; i++) {
+    if (after.held[i]) continue; // scooped: it rides in the bucket (the scoop scenario checks how it turns)
     const way = Math.hypot(after.x[i] - before.x[i], after.z[i] - before.z[i]);
     const dot = Math.abs(before.spin.slice(4 * i, 4 * i + 4).reduce((s, v, k) => s + v * after.spin[4 * i + k], 0));
     const turned = 2 * Math.acos(Math.min(1, dot)) > 1e-3;
@@ -389,24 +385,29 @@ export default async function balls(t) {
     t.check(step.p95 < STEP_BUDGET_MS, `${label}: ball step p95 under ${STEP_BUDGET_MS} ms (${step.p95.toFixed(3)} ms)`);
   }
   t.log(`worst over the run (every 4th frame): ${worst.inRock} in rocks (deepest ${worst.deepest.toFixed(4)}), ${worst.outside} outside the arena, ${worst.nan} NaN, highest ball y ${worst.highest.toFixed(2)}`);
-  t.check(worst.inRock === 0 && worst.outside === 0 && worst.nan === 0, 'no ball ever ended a frame in a rock, outside the arena or NaN');
-  t.check(end.count === laid.count && end.inRock === 0 && end.outside === 0, `all ${end.count} balls still in the arena at the end`);
+  t.check(worst.inRock === 0 && worst.outside === 0 && worst.nan === 0, 'no free ball ever ended a frame in a rock, outside the arena or NaN');
+  const load = await t.evaluate('({ count: __zm.bucket.count, capacity: __zm.bucket.capacity })');
+  t.check(end.count === laid.count && end.held === load.count && load.count <= load.capacity && end.inRock === 0 && end.outside === 0,
+    `all ${end.count} balls accounted for: ${end.count - end.held} in the arena, ${end.held} in the bucket (${load.count}/${load.capacity})`);
   const sync = await t.evaluate('({ worst: __ballProbe.syncWorst, checks: __ballProbe.syncChecks, hidden: __ballProbe.hidden, uploads: __zm.ballView.uploadCount, frames: __ballProbe.ms.length })');
   t.log(`drawn vs field: worst ${sync.worst.toExponential(1)} over ${sync.checks} checked frames; ${sync.uploads} uploads in ${sync.frames} frames`);
   t.check(sync.worst < SYNC_TOLERANCE && sync.hidden === 0, 'after every checked frame every ball was drawn where the field had it (only moved balls rewritten)');
   const fps1 = await measureFps(t, 'after the run');
   t.log(`fps summary: at rest ${fps0.on.toFixed(1)} / ${fps0.off.toFixed(1)}, after the run ${fps1.on.toFixed(1)} / ${fps1.off.toFixed(1)} (with / without balls)`);
 
-  // 7. Depth against real meshes (last: it moves balls behind the simulation's back). A few balls are
-  // put into the bucket's scoop, through its side walls, into the body top and a track (Tractor1
-  // local axes); the impostors must cut into the meshes along curves, as real spheres would.
+  // 7. Depth against real meshes (last: it moves balls behind the simulation's back). A few free balls
+  // are put through the bucket's side walls, into the body top and a track (Tractor1 local axes); the
+  // impostors must cut into the meshes along curves, as real spheres would. (The scoop scenario shots
+  // show the real load in the bucket.)
   await t.evaluate(`(() => {
     const b = __zm.balls, tr = __zm.tractor, c = Math.cos(tr.yaw), s = Math.sin(tr.yaw);
-    const spots = [[-0.3, 0.3, 1.45], [0.3, 0.3, 1.5], [-0.74, 0.35, 1.3], [0.74, 0.4, 1.65], [0.2, 1.25, 0.1], [-0.85, 0.3, -0.3]];
-    spots.forEach(([x, y, z], i) => {
+    const spots = [[-0.74, 0.35, 1.3], [0.74, 0.4, 1.65], [0.2, 1.25, 0.1], [-0.85, 0.3, -0.3]];
+    let i = 0;
+    for (const [x, y, z] of spots) {
+      while (b.isHeld(i)) i++;
       b.x[i] = tr.x + x * c + z * s; b.y[i] = y; b.z[i] = tr.z - x * s + z * c;
-      b.moved[b.movedCount++] = i;
-    });
+      b.moved[b.movedCount++] = i++;
+    }
   })()`);
   await zoomOn('depth-bucket', ...(await t.evaluate('[__zm.tractor.x, __zm.tractor.z]')), 9);
 }
