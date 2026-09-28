@@ -26,7 +26,7 @@ export class BallRenderer extends Component {
   material: Material | null = null;
 
   private quads: BallQuads | null = null;
-  private model: renderer.scene.Model | null = null;
+  private sceneModel: renderer.scene.Model | null = null;
   private mesh: RenderingSubMesh | null = null;
   private dynamicBuffer: gfx.Buffer | null = null;
   private uploads = 0;
@@ -34,6 +34,11 @@ export class BallRenderer extends Component {
   /** The vertex data as last uploaded (QA checks read it). */
   get data(): BallQuads | null {
     return this.quads;
+  }
+
+  /** The render-scene model that draws the balls (QA checks read its sub-models). */
+  get model(): renderer.scene.Model | null {
+    return this.sceneModel;
   }
 
   /** Dynamic-stream uploads so far (one per frame in which some ball moved). */
@@ -68,7 +73,7 @@ export class BallRenderer extends Component {
     ];
     this.mesh = new RenderingSubMesh([this.dynamicBuffer, staticBuffer], attributes, gfx.PrimitiveMode.TRIANGLE_LIST, indexBuffer);
 
-    const model = (this.model = root.createModel<renderer.scene.Model>(renderer.scene.Model));
+    const model = (this.sceneModel = root.createModel<renderer.scene.Model>(renderer.scene.Model));
     model.node = model.transform = this.node;
     model.castShadow = false;
     model.receiveShadow = false;
@@ -91,7 +96,7 @@ export class BallRenderer extends Component {
   }
 
   protected onDisable(): void {
-    this.model?.scene?.removeModel(this.model);
+    this.sceneModel?.scene?.removeModel(this.sceneModel);
   }
 
   protected onDestroy(): void {
@@ -100,15 +105,15 @@ export class BallRenderer extends Component {
 
   private attach(): void {
     const scene = this.node.scene?.renderScene;
-    if (!this.model || !scene || this.model.scene) return;
-    scene.addModel(this.model);
+    if (!this.sceneModel || !scene || this.sceneModel.scene) return;
+    scene.addModel(this.sceneModel);
   }
 
   private destroyModel(): void {
-    if (this.model) {
-      this.model.scene?.removeModel(this.model);
-      director.root?.destroyModel(this.model);
-      this.model = null;
+    if (this.sceneModel) {
+      this.sceneModel.scene?.removeModel(this.sceneModel);
+      director.root?.destroyModel(this.sceneModel);
+      this.sceneModel = null;
     }
     this.mesh?.destroy(); // with its vertex and index buffers
     this.mesh = null;

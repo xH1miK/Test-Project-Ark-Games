@@ -12,20 +12,25 @@ CCEffect %{
       rasterizerState:
         cullMode: none
       properties:
+        # The defaults are the tuned look (compared with the example on close-ups and at play distance).
         mainColor:      { value: [0.1255, 0.498, 0.5922, 1.0], editor: { type: color, tooltip: 'Base colour (sRGB)' } }
         metallic:       { value: 0.85, target: surface.x, editor: { slide: true, range: [0, 1.0], step: 0.01 } }
-        shininess:      { value: 60.0, target: surface.y, editor: { tooltip: 'Sun glint exponent' } }
-        glint:          { value: 1.0, target: surface.z, editor: { tooltip: 'Sun glint strength' } }
-        ambient:        { value: 1.0, target: surface.w, editor: { tooltip: 'Sky/ground light strength' } }
-        diffuse:        { value: 1.0, target: light.x, editor: { tooltip: 'Sun diffuse strength' } }
-        mirror:         { value: 1.0, target: light.y, editor: { tooltip: 'Sky/ground reflection strength (the metal look)' } }
+        roughness:      { value: 0.6, target: surface.y, editor: { slide: true, range: [0, 1.0], step: 0.01, tooltip: '0: sharp mirror of sky/ground; 1: a soft gradient' } }
+        ambient:        { value: 1.3, target: surface.z, editor: { tooltip: 'Scene sky/ground light strength' } }
+        diffuse:        { value: 1.8, target: surface.w, editor: { tooltip: 'Scene sun (diffuse) strength' } }
+        mirror:         { value: 1.4, target: shine.x, editor: { tooltip: 'Strength of the mirrored sky/ground (the metal look)' } }
+        shininess:      { value: 30.0, target: shine.y, editor: { tooltip: 'Sun glint exponent' } }
+        glint:          { value: 0.25, target: shine.z, editor: { tooltip: 'Sun glint strength (white, like a lacquer)' } }
+        occlusion:      { value: 0.6, target: shine.w, editor: { slide: true, range: [0, 1.0], step: 0.01, tooltip: 'How much the floor darkens the lower half of a ball' } }
+        mirrorSky:      { value: [0.85, 0.95, 1.0, 1.0], editor: { type: color, tooltip: 'What the balls mirror above the horizon (sRGB)' } }
+        mirrorGround:   { value: [0.04, 0.06, 0.09, 1.0], editor: { type: color, tooltip: 'What the balls mirror below the horizon (sRGB)' } }
         rimColor:       { value: [0.6, 0.9, 1.0, 1.0], editor: { type: color, tooltip: 'Fresnel rim colour (sRGB)' } }
-        rimStrength:    { value: 0.3, target: light.z }
-        rimPower:       { value: 3.0, target: light.w }
+        rimStrength:    { value: 0.08, target: rim.x }
+        rimPower:       { value: 3.0, target: rim.y }
         stripeWidth:    { value: 0.16, target: pattern.x, editor: { tooltip: 'Half width of the band round the ball, share of the radius' } }
-        stripeShade:    { value: 0.7, target: pattern.y, editor: { tooltip: 'Colour multiplier inside the band' } }
+        stripeShade:    { value: 0.74, target: pattern.y, editor: { tooltip: 'Colour multiplier inside the band' } }
         spotSize:       { value: 0.93, target: pattern.z, editor: { tooltip: 'Spots on the two poles off the band: cosine of their angular radius' } }
-        spotShade:      { value: 1.35, target: pattern.w, editor: { tooltip: 'Colour multiplier inside the spots' } }
+        spotShade:      { value: 1.28, target: pattern.w, editor: { tooltip: 'Colour multiplier inside the spots' } }
 }%
 
 CCProgram ball-vs %{
@@ -76,9 +81,12 @@ CCProgram ball-fs %{
 
   uniform BallLook {
     vec4 mainColor;
-    vec4 surface; // x: metallic, y: glint exponent, z: glint strength, w: ambient strength
-    vec4 light;   // x: sun diffuse strength, y: reflection strength, z: rim strength, w: rim power
+    vec4 surface; // x: metallic, y: roughness, z: ambient strength, w: sun diffuse strength
+    vec4 shine;   // x: mirror strength, y: glint exponent, z: glint strength, w: floor occlusion
+    vec4 mirrorSky;
+    vec4 mirrorGround;
     vec4 rimColor;
+    vec4 rim;     // x: strength, y: power
     vec4 pattern; // x: band half width, y: band shade, z: spot size (cosine), w: spot shade
   };
 
@@ -132,16 +140,23 @@ CCProgram ball-fs %{
     vec3 ground = cc_ambientGround.rgb * cc_ambientSky.w;
 
     float metal = surface.x;
+    float rough = surface.y;
     vec3 f0 = mix(vec3(0.04), albedo, metal);
-    vec3 fresnel = f0 + (1.0 - f0) * pow(1.0 - NV, 5.0);
+    // Schlick's Fresnel; a rough surface brightens less at grazing angles.
+    vec3 fresnel = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NV, 5.0);
+    // The floor hides the sky from the lower half of a ball resting on it.
+    float open = 1.0 - shine.w * (1.0 - smoothstep(-0.6, 0.6, N.y));
     // Diffuse light from the sun and the sky/ground hemisphere; a metal keeps little of it.
-    vec3 lit = albedo * (1.0 - metal) * (sun * NL * light.x + mix(ground, sky, N.y * 0.5 + 0.5) * surface.w);
-    // What the ball mirrors: the sky above, the ground below.
-    vec3 R = reflect(-V, N);
-    lit += fresnel * mix(ground, sky, smoothstep(-0.35, 0.35, R.y)) * light.y;
+    vec3 lit = albedo * (1.0 - metal) * (sun * NL * surface.w + mix(ground, sky, N.y * 0.5 + 0.5) * (surface.z * open));
+    // What the ball mirrors: a bright sky above, a dark ground below (its own colours, so the metal
+    // look does not depend on the scene's ambient tint). A rough ball mirrors along its normal
+    // rather than the reflected ray: a soft top-to-bottom gradient instead of a horizon line.
+    vec3 R = normalize(mix(reflect(-V, N), N, rough));
+    vec3 mirrored = mix(SRGBToLinear(mirrorGround.rgb), SRGBToLinear(mirrorSky.rgb), R.y * 0.5 + 0.5);
+    lit += fresnel * mirrored * (shine.x * open);
     // A white sun glint (normalised Blinn-Phong) and a coloured Fresnel rim.
-    lit += sun * (pow(NH, surface.y) * (surface.y + 8.0) * 0.0398 * NL * surface.z);
-    lit += SRGBToLinear(rimColor.rgb) * (pow(1.0 - NV, light.w) * light.z);
+    lit += sun * (pow(NH, shine.y) * (shine.y + 8.0) * 0.0398 * NL * shine.z);
+    lit += SRGBToLinear(rimColor.rgb) * (pow(1.0 - NV, rim.y) * rim.x * open);
     return CCFragOutput(vec4(lit, 1.0));
   }
 }%
