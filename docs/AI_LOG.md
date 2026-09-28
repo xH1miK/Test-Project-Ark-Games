@@ -178,3 +178,16 @@ New session from the handoff prompt; MCP connected at start.
 | 19:08 | Build → pack: **2.600 MB** (+7 KB); `file://` in SwiftShader: FAIL — the per-frame time (7 fps = ~5 steps a frame) and **one ball ended a frame 0.014 inside a rock** (landscape) | AI | — |
 | 19:12 | Node repro: routes through the middle did not reproduce; a perimeter route with T2 at a jittery frame time did (132 ball-frames, all at x = 15.525 = the edge clamp). The edge clamp came after the rocks and put a corner ball back into a rock → edges first, rocks last (≤ 4 passes, like the tractor). "Outside" is now checked against a flood-filled arena, not the edge rectangle (the rocks close the arena; the edges are a safety net). Regression test fails on the old code | AI | 66/66 green |
 | 19:15 | Rebuild → pack → check | AI | **PASS** portrait + landscape from `file://` (`balls`, `drive`); SwiftShader: step T1 0.3 ms mean / 0.6 p95, T2 0.7 / 1.2; **GPU 60 fps**, step T1 0.42 / 0.7 ms, T2 0.93 / 1.5 ms, 85–93% of the balls asleep; start 1.3–2.3 s |
+
+## 2026-09-28 (Mon) — Review pass: UI on top (~10:55–11:15), branch `core/m3-ui-on-top`
+
+User review of the M3 screenshots: the balls covered the joystick; asked to make the joystick the topmost layer and to keep all future UI grouped on top.
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 10:55 | Asked for the joystick on top of the balls and for all UI grouped on top | human | — |
+| 10:57 | Cause: the balls in the M3 shots are the QA overlay (an HTML canvas over the whole game), not the game. In the game the UI camera already renders after the world camera (priority 1073741824 vs 0) and clears depth only, and the joystick is the last Canvas child. Found a real latent problem: the UI camera also saw `UI_3D` (world-space UI such as future pad labels would be drawn twice, once flat over everything) | AI | Camera and Canvas settings read from the saved `.scene` |
+| 11:01 | Scene via `tools/mcp.mjs` (the session's native MCP tools had disconnected; the editor's server was up): UI camera sees `UI_2D` only; `Canvas/Hud` group (full-screen Widget, margins set through `scene:set-property`) below `Canvas/Joystick` | AI | Saved `.scene` read back: Camera → Hud → Joystick, visibility 33554432, margins 0 |
+| 11:03 | `tools/scenarios/lib/ui-layers.mjs`: UI camera renders last and keeps the colour, only it sees `UI_2D`, everything under the Canvas is on `UI_2D` and nothing else is, the joystick is the topmost group; run by `drive` | AI | PASS both orientations; negative test (joystick under the Hud, world camera after the UI, the tractor on `UI_2D`) → 4 problems reported, FAIL |
+| 11:05 | QA overlay cuts every UI sprite out by its own alpha (the sprites sit in the dynamic atlas, so the image comes from the frame's original texture) — the screenshots now show the real layering | AI | `balls` PASS both orientations, GPU 60 fps; shots: joystick ring and knob over the balls, balls visible through the ring's centre |
+| 11:08 | Rule for future UI in CLAUDE.md (groups under Canvas, joystick last, no 3D node on `UI_2D`, no camera after the UI camera) | AI | — |

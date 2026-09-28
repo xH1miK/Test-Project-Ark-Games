@@ -8,6 +8,7 @@
 //   node tools/check-html.mjs <html|url> --scenario drive [--gpu]
 
 import { gameWait as waitGame, installAutopilot, runLegs } from './lib/autopilot.mjs';
+import { checkUiOnTop } from './lib/ui-layers.mjs';
 
 const MAX_PENETRATION = 0.05;
 
@@ -120,7 +121,10 @@ export default async function drive(t) {
   await gameWait(0.7);
   t.check(Math.abs((await t.evaluate('__zm.camera.zoom')) - 1) < 1e-6, 'tierChanged 1 brings the zoom back to 1');
 
-  // 5. Real touches. Area coordinates (origin at the screen centre, design units) -> client CSS px.
+  // 5. The joystick is drawn over everything (UI camera last, joystick the topmost Canvas group).
+  await checkUiOnTop(t);
+
+  // 6. Real touches. Area coordinates (origin at the screen centre, design units) -> client CSS px.
   await t.evaluate(`(() => { __zm.input.release(); __zm.tractor.place(5, 8, 0); __zm.camera.snap(5, 0, 8); })()`);
   await gameWait(0.3);
   const view = await t.evaluate(`(() => { const r = cc.game.canvas.getBoundingClientRect(), v = cc.view.getVisibleSize(),
