@@ -56,7 +56,8 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
   let carpetSpec = ballSettings.carpet;
   if (pads) {
     const r = clearRect(LEVEL.plates.gate);
-    carpetSpec = { ...carpetSpec, holes: [...carpetSpec.holes, { kind: 'box', x: (r.minX + r.maxX) / 2, z: (r.minZ + r.maxZ) / 2, halfX: (r.maxX - r.minX) / 2, halfZ: (r.maxZ - r.minZ) / 2 }] };
+    const k = ballSettings.radius; // a carpet hole keeps centres a radius off its edge: the zone's edge then
+    carpetSpec = { ...carpetSpec, holes: [...carpetSpec.holes, { kind: 'box', x: (r.minX + r.maxX) / 2, z: (r.minZ + r.maxZ) / 2, halfX: (r.maxX - r.minX) / 2 - k, halfZ: (r.maxZ - r.minZ) / 2 - k }] };
   }
   const centres = carpet ? layCarpet(carpetSpec, ballSettings.radius, ballSettings.maxCount, grid) : new Float64Array(0);
   const balls = new BallField(ballSettings, Math.max(64, centres.length / 2 + 64), grid);

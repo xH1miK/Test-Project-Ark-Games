@@ -104,14 +104,15 @@ export class GameRoot extends Component {
     this.tractor = new TractorModel(Config.tractor, Config.tractor.tiers[0], this.obstacles);
     this.tractor.place(startSpot.worldPosition.x, startSpot.worldPosition.z, yawOf(startSpot));
 
-    // Pad plates on the ground; the gate's is there from the start, so the carpet leaves it bare.
+    // Pad plates on the ground; the gate's is there from the start, so the carpet leaves it bare (ball
+    // centres up to the edge of its clear zone: a carpet hole keeps them a radius off its own edge).
     const upgradePlate = upgradePadView.plateRect(Config.pads.clearMargin);
     const gatePlate = gatePadView.plateRect(Config.pads.clearMargin);
     const { radius, maxCount, carpet } = Config.balls;
     const holes: CarpetHole[] = [...carpet.holes];
     if (gatePlate) {
       holes.push({ kind: 'box', x: (gatePlate.minX + gatePlate.maxX) / 2, z: (gatePlate.minZ + gatePlate.maxZ) / 2,
-        halfX: (gatePlate.maxX - gatePlate.minX) / 2, halfZ: (gatePlate.maxZ - gatePlate.minZ) / 2 });
+        halfX: (gatePlate.maxX - gatePlate.minX) / 2 - radius, halfZ: (gatePlate.maxZ - gatePlate.minZ) / 2 - radius });
     }
     const centres = layCarpet({ ...carpet, holes }, radius, maxCount, this.obstacles);
     this.balls = new BallField(Config.balls, centres.length / 2, this.obstacles);

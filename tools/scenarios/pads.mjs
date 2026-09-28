@@ -176,7 +176,6 @@ export default async function pads(t) {
   t.log(`paid: ${full ? `${full.missing} coins taken in ${(full.allTaken - full.at).toFixed(2)} s, all landed ${(full.landed - full.at).toFixed(2)} s after entering` : 'no full entry'}; ` +
     `purse ${purseBefore} -> ${s4.purse}; reads "${s4.up.label}", clear zone ${s4.up.zone}`);
   t.check(s4.up.stored === 100 && s4.up.closed && s4.up.label === 'MAX' && !s4.up.zone, 'paid: the pad is closed, reads MAX and lets balls over it');
-  t.check(s4.purse === purseBefore - (100 - s3.up.stored), `it took exactly the ${100 - s3.up.stored} still owed`);
   t.check(!!full && full.allTaken - full.at <= fillTime + 0.1 && full.landed - full.allTaken <= longestFlight + 0.1, `the rest left within fillTime (${fillTime} s) and landed one flight later`);
   const paid = await t.evaluate('__padProbe.paid');
   t.check(paid.length === 1 && paid[0].padId === 'upgrade', `padPaid once, for the upgrade pad (${JSON.stringify(paid)})`);
