@@ -2,8 +2,8 @@
 // (tier 1, then the tier 2 boxes and speed); no ball ever ends a frame inside a rock or outside the
 // field; the carpet falls asleep again once the tractor stops; the time of the ball step is measured
 // per frame in the browser. Balls are painted by a debug overlay (a 2D canvas over the game, projected
-// through the game camera; orange = simulated this step) for the screenshots only; the real renderer
-// comes with M4.
+// through the game camera; orange = simulated this step) for the screenshots only; the UI sprites are
+// cut out of it, so the joystick stays on top as in the game. The real renderer comes with M4.
 //
 //   node tools/check-html.mjs <html|url> --scenario balls [--gpu]
 
@@ -110,6 +110,29 @@ const OVERLAY = `(() => {
     ctx.strokeStyle = 'rgba(0,0,0,0.4)';
     ctx.stroke();
   }
+  // The game draws its screen UI after the world (UI camera): cut every UI sprite out of this
+  // overlay by its own alpha, so the joystick shows on top of the balls as it will over the real renderer.
+  const uiCam = cc.find('Canvas/Camera').getComponent(cc.Camera);
+  const Sprite = cc.js.getClassByName('cc.Sprite'), UITransform = cc.js.getClassByName('cc.UITransform'), UIOpacity = cc.js.getClassByName('cc.UIOpacity');
+  const lo = new cc.Vec3(), hi = new cc.Vec3();
+  ctx.globalCompositeOperation = 'destination-out';
+  for (const sp of cc.find('Canvas').getComponentsInChildren(Sprite)) {
+    const f = sp.spriteFrame;
+    if (!sp.enabledInHierarchy || !f) continue;
+    // Packed into the dynamic atlas: the original texture still has its image and the frame's place in it.
+    const src = f.original ? f.original._texture : f.texture, img = src && src.image && src.image.data;
+    if (!img) continue;
+    const box = sp.node.getComponent(UITransform).getBoundingBoxToWorld();
+    uiCam.worldToScreen(lo.set(box.x, box.y, 0), lo);
+    uiCam.worldToScreen(hi.set(box.x + box.width, box.y + box.height, 0), hi);
+    let alpha = sp.color.a / 255;
+    for (let n = sp.node; n; n = n.parent) { const o = n.getComponent(UIOpacity); if (o) alpha *= o.opacity / 255; }
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, f.original ? f.original._x : f.rect.x, f.original ? f.original._y : f.rect.y, f.rect.width, f.rect.height,
+      lo.x, cv.height - hi.y, hi.x - lo.x, hi.y - lo.y);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
   return order.length;
 })()`;
 const HIDE_OVERLAY = `(() => { const cv = document.getElementById('ball-overlay'); if (cv) cv.style.display = 'none'; })()`;
