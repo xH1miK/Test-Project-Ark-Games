@@ -176,6 +176,7 @@ export class BallField {
   /** Whether each zone was active in the last step, and the ones active in this step. */
   private readonly zoneWasActive: boolean[] = [];
   private readonly liveZones: ClearZone[] = [];
+  private readonly edgeGaps = new Float64Array(4);
 
   constructor(settings: BallFieldSettings, capacity: number, blocker: CircleBlocker) {
     this.settings = settings;
@@ -744,38 +745,49 @@ export class BallField {
   }
 
   /**
-   * Moves a ball on the floor of a kept-clear zone toward the zone's nearest edge, so that it has gone
-   * at least the zone's speed × dt that way in this step (counting how far it already moved). A move
-   * rather than a speed: a rolling ball would ride up onto the resting balls outside, a moved one shoves
-   * them aside, so a crowd round the zone cannot keep it in.
+   * Moves a ball on the floor of a kept-clear zone toward the nearest edge of the zone that has room for
+   * a ball beyond it, so that it has gone at least the zone's speed × dt that way in this step (counting
+   * how far it already moved). A move rather than a speed: a rolling ball would ride up onto the resting
+   * balls outside, a moved one shoves them aside, so a crowd round the zone cannot keep it in. An edge
+   * with a wall within a diameter behind it is skipped (the gate plate's south edge): the wall wins,
+   * pushes the ball back in, and the two would take turns for ever.
    */
   private clearOff(i: number, dt: number): void {
     const zone = this.zoneAt(this.x[i], this.z[i]);
     if (!zone) return;
     const px = this.x[i];
     const pz = this.z[i];
-    let ex = -1;
-    let ez = 0;
-    let gap = px - zone.minX;
-    if (zone.maxX - px < gap) {
-      gap = zone.maxX - px;
-      ex = 1;
+    // Edges: 0 = -X, 1 = +X, 2 = -Z, 3 = +Z; the nearest open one, else the nearest.
+    const gaps = this.edgeGaps;
+    gaps[0] = px - zone.minX;
+    gaps[1] = zone.maxX - px;
+    gaps[2] = pz - zone.minZ;
+    gaps[3] = zone.maxZ - pz;
+    let edge = -1;
+    for (let pass = 0; pass < 2 && edge < 0; pass++) {
+      let nearest = Infinity;
+      for (let e = 0; e < 4; e++) {
+        if (gaps[e] >= nearest || (pass === 0 && !this.roomBeyond(zone, e, px, pz))) continue;
+        nearest = gaps[e];
+        edge = e;
+      }
     }
-    if (pz - zone.minZ < gap) {
-      gap = pz - zone.minZ;
-      ex = 0;
-      ez = -1;
-    }
-    if (zone.maxZ - pz < gap) {
-      gap = zone.maxZ - pz;
-      ex = 0;
-      ez = 1;
-    }
+    const gap = gaps[edge];
+    const ex = edge === 0 ? -1 : edge === 1 ? 1 : 0;
+    const ez = edge === 2 ? -1 : edge === 3 ? 1 : 0;
     const done = (px - this.sx[i]) * ex + (pz - this.sz[i]) * ez;
     const move = Math.min(zone.speed * dt - done, gap + 1e-3);
     if (move <= 0) return;
     this.x[i] += ex * move;
     this.z[i] += ez * move;
+  }
+
+  /** True when a ball fits one diameter beyond the zone's edge `e` (see clearOff) where (px, pz) would cross it. */
+  private roomBeyond(zone: ClearZone, e: number, px: number, pz: number): boolean {
+    const d = 2 * this.radius;
+    const x = e === 0 ? zone.minX - d : e === 1 ? zone.maxX + d : px;
+    const z = e === 2 ? zone.minZ - d : e === 3 ? zone.maxZ + d : pz;
+    return this.blocker.resolveCircle(x, z, this.radius, Blocks.Balls, this.resolved) <= 0;
   }
 
   /**

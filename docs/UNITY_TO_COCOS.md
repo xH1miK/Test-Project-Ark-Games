@@ -57,6 +57,9 @@
 | `Time.timeScale = 0` | `director.pause()`: update и lateUpdate стоят, рендер идёт (кадры для снимков «на паузе»; камеру ставить руками) | сценарии `core-loop`, `long-run` |
 | Script Execution Order | Один корень композиции (`GameRoot`) сам вызывает модели в нужном порядке. `Director.EVENT_BEFORE_UPDATE` / `EVENT_AFTER_UPDATE` — до и после всех update/lateUpdate кадра (сюда цепляются автопилот и проверки) | `GameRoot`, `tools/scenarios` |
 | Unity Test Runner (EditMode) | Модели — чистый TS без `cc`: тесты и бенчмарки в Node (`node --test`, type stripping) | `tools/test`, `tools/bench` |
+| World Space Canvas | `RenderRoot2D` на узле в мире (слой Default, рисует основная камера): спрайты и Label как в UI, лежит на земле поворотом −90° по X. Встроенный материал спрайта рисует без теста глубины — поверх трактора; нужен свой материал из `builtin-sprite` с depth test on / depth write off (`Materials/WorldSprite.mtl`) на Sprite и Label (`customMaterial`). Спрайт и цифры bitmap-шрифта из одного динамического атласа = 1 draw call на плашку | площадки, табличка над воротами (M8) |
+| Добавить Text после настройки RectTransform | `addComponent(Label)` сбрасывает размер UITransform узла под строку по умолчанию: заданный до этого размер теряется (при Overflow = SHRINK шрифт ужимается). Размер ставить после Label или через `scene:set-property` | цифры площадок (M8) |
+| Physics layers / «зона без объектов» | Своих коллайдеров нет: «чистая зона» площадки — прямоугольник в симуляции шариков, который выталкивает шарики у пола позиционно (гарантированный сдвиг за шаг), до толкателя-трактора | `BallField.addClearZone` (M8) |
 
 ## Грабли ядра
 

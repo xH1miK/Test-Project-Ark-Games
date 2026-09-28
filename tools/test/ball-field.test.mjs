@@ -569,3 +569,40 @@ test('a pad popping up in the real carpet: its plate is cleared, no ball leaves 
   assert.ok(asleepAt > 0, 'asleep within 6 s');
   assert.ok(m.overlap < 0.035, `overlap at rest ${m.overlap}`);
 });
+
+test('a clear zone with a wall right behind its nearest edge: a ball leaves through the far edge instead', () => {
+  // A wall 0.48 south of the zone (the gate plate: its clear zone ends 0.48 short of the gate's front):
+  // balls pinned against it would keep a ball pushed out that way in the zone for ever.
+  const wall = { kind: 'box', x: 0, z: -2.1, halfX: 6, halfZ: 0.5, angle: 0 };
+  const { balls } = openField([wall]);
+  const zone = zoneOf(-2.2, 2.2, -1.12, 1.12);
+  balls.addClearZone(zone);
+  const ball = balls.add(0, R, -0.95); // 0.17 from the south edge, 2.07 from the north one, 2.2 from the ends
+  let asleepAt = -1;
+  for (let k = 0; k < 300 && asleepAt < 0; k++) {
+    balls.step(1 / 30, null);
+    if (k > 5 && balls.simulatedCount === 0) asleepAt = k;
+  }
+  assert.ok(balls.z[ball] > zone.maxZ, `left through the north edge (z ${balls.z[ball].toFixed(2)})`);
+  assert.ok(asleepAt > 0, 'asleep within 10 s');
+});
+
+test('the balls route with the pads live, at jittery 2..6 fps: the carpet always falls asleep after the stop', () => {
+  // Seeds whose frame sequences once kept balls pressed between the gate plate's zone and the gate for ever.
+  for (const seed of [3, 8, 10, 12]) {
+    const random = mulberry32(seed);
+    const nextDt = () => Math.min(Config.time.maxFrameDt, 1 / 6 + random() * (0.5 - 1 / 6));
+    const world = makeWorld({ shredder: true, pads: true });
+    driveLegs(world, BALLS_SCENARIO_ROUTE, nextDt);
+    let t = 0;
+    let asleep = false;
+    while (t < 8 && !asleep) {
+      const dt = nextDt();
+      frame(world, dt, 0, 0);
+      world.balls.clearMoved();
+      t += dt;
+      asleep = world.balls.simulatedCount === 0;
+    }
+    assert.ok(asleep, `seed ${seed}: asleep within 8 s of game time after the stop`);
+  }
+});
