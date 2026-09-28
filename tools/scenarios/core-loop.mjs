@@ -107,6 +107,21 @@ const HUD_ON_SCREEN = `(() => {
   return { ...hud, shown, framed, label: cc.find('Canvas/Hud/CoinHud/Plate/Amount').getComponent(cc.js.getClassByName('cc.Label')).string };
 })()`;
 
+/**
+ * While the game is paused (the rig does not move the camera then): the camera low and to the side of
+ * the flight from the tractor to the shredder, on the usual +X+Z side, looking at the middle of the arcs.
+ */
+const SIDE_VIEW = `(() => {
+  const tr = __zm.tractor, s = cc.find('Level/Shredder').worldPosition;
+  const mx = (tr.x + s.x) / 2, mz = (tr.z + s.z) / 2, dx = s.x - tr.x, dz = s.z - tr.z, len = Math.hypot(dx, dz);
+  let nx = -dz / len, nz = dx / len;
+  if (nx + nz < 0) { nx = -nx; nz = -nz; }
+  const cam = cc.find('Main Camera');
+  cam.setPosition(mx + nx * 8, 3, mz + nz * 8);
+  cam.lookAt(new cc.Vec3(mx, 1, mz));
+  cam.getComponent(cc.js.getClassByName('cc.Camera')).fov = 40;
+})()`;
+
 // From the start spot (9, -11) west into the carpet: the bucket fills up.
 const FILL = [{ name: 'fill: into the carpet', kind: 'goto', x: 3, z: -11 }];
 // North into the zone (|dx|, |dz| <= 3.5 around the shredder at (5.75, -1.85)); stop just inside.
@@ -178,7 +193,7 @@ export default async function coreLoop(t) {
   /**
    * Runs the legs; once a load of 5+ balls goes in (a hand-in after the first `after` ones) and has
    * flown ~0.16 s (about the top of the arcs), pauses the game for close-ups between the tractor and
-   * the shredder, then lets it go on.
+   * the shredder (from above, and low from the side), then lets it go on.
    */
   const runWithArcShots = async (label, legs, after) => {
     await t.evaluate(`__loopProbe.pauseWhen = () => { const h = __loopProbe.handIns.find((x, k) => k >= ${after} && x.count >= 5);
@@ -188,11 +203,12 @@ export default async function coreLoop(t) {
     t.check(paused, `${label}: paused mid-flight for the close-ups`);
     if (paused) {
       const mid = await t.evaluate(`(() => { const tr = __zm.tractor, s = cc.find('Level/Shredder').worldPosition; return { x: (tr.x + s.x) / 2, z: (tr.z + s.z) / 2 }; })()`);
-      for (const [name, fov] of [['arc-close', 14], ['arc-wide', 24]]) {
-        await t.evaluate(parkCamera(mid.x, mid.z, fov));
-        await t.frames(2);
-        await t.shot(name);
-      }
+      await t.evaluate(parkCamera(mid.x, mid.z, 18));
+      await t.frames(2);
+      await t.shot('arc-top');
+      await t.evaluate(SIDE_VIEW);
+      await t.frames(2);
+      await t.shot('arc-side');
       await t.evaluate(`(() => { __loopProbe.paused = false; __loopProbe.pauseWhen = null; cc.director.resume(); })()`);
       await t.evaluate(RELEASE_CAMERA);
     } else {
