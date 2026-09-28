@@ -39,13 +39,14 @@ const PROBES = `(() => {
     probe.pending += ms;
   };
   const drawn = { x: 0, y: 0, z: 0, radius: 0 };
+  // hidden: balls drawn wrong way round - hidden while in the game, or drawn once shredded.
   window.__ballSync = () => {
     const data = zm.ballView.data;
     let worst = 0, hidden = 0;
     for (let i = 0; i < balls.count; i++) {
       data.readBall(i, drawn);
       worst = Math.max(worst, Math.abs(drawn.x - balls.x[i]), Math.abs(drawn.y - balls.y[i]), Math.abs(drawn.z - balls.z[i]));
-      if (!(drawn.radius > 0)) hidden++;
+      if (balls.isRemoved(i) ? drawn.radius !== 0 : !(drawn.radius > 0)) hidden++;
     }
     return { worst, hidden };
   };
@@ -106,7 +107,8 @@ const AUDIT = `(() => {
       if (!inArena(x, z) || y < r - 1e-6) outside++;
       if (y > highest) highest = y;
     }
-    return { count: b.count, held: b.heldCount, inRock, deepest, outside, nan, highest, simulated: b.simulatedCount, hotCells: b.hotCellCount };
+    return { count: b.count, held: b.heldCount, removed: b.removedCount, flying: __zm.shredder.inFlight, inRock, deepest, outside, nan, highest,
+      simulated: b.simulatedCount, hotCells: b.hotCellCount };
   };
   return 'installed';
 })()`;
@@ -387,11 +389,12 @@ export default async function balls(t) {
   t.log(`worst over the run (every 4th frame): ${worst.inRock} in rocks (deepest ${worst.deepest.toFixed(4)}), ${worst.outside} outside the arena, ${worst.nan} NaN, highest ball y ${worst.highest.toFixed(2)}`);
   t.check(worst.inRock === 0 && worst.outside === 0 && worst.nan === 0, 'no free ball ever ended a frame in a rock, outside the arena or NaN');
   const load = await t.evaluate('({ count: __zm.bucket.count, capacity: __zm.bucket.capacity })');
-  t.check(end.count === laid.count && end.held === load.count && load.count <= load.capacity && end.inRock === 0 && end.outside === 0,
-    `all ${end.count} balls accounted for: ${end.count - end.held} in the arena, ${end.held} in the bucket (${load.count}/${load.capacity})`);
+  // The route passes the shredder: whatever it took (the T2 bucket near its zone, the throat) is flying or gone.
+  t.check(end.count === laid.count && end.held === load.count + end.flying + end.removed && load.count <= load.capacity && end.inRock === 0 && end.outside === 0,
+    `all ${end.count} balls accounted for: ${end.count - end.held} in the arena, ${load.count}/${load.capacity} in the bucket, ${end.flying} flying, ${end.removed} shredded`);
   const sync = await t.evaluate('({ worst: __ballProbe.syncWorst, checks: __ballProbe.syncChecks, hidden: __ballProbe.hidden, uploads: __zm.ballView.uploadCount, frames: __ballProbe.ms.length })');
   t.log(`drawn vs field: worst ${sync.worst.toExponential(1)} over ${sync.checks} checked frames; ${sync.uploads} uploads in ${sync.frames} frames`);
-  t.check(sync.worst < SYNC_TOLERANCE && sync.hidden === 0, 'after every checked frame every ball was drawn where the field had it (only moved balls rewritten)');
+  t.check(sync.worst < SYNC_TOLERANCE && sync.hidden === 0, 'after every checked frame every ball was drawn where the field had it, the shredded ones hidden (only moved balls rewritten)');
   const fps1 = await measureFps(t, 'after the run');
   t.log(`fps summary: at rest ${fps0.on.toFixed(1)} / ${fps0.off.toFixed(1)}, after the run ${fps1.on.toFixed(1)} / ${fps1.off.toFixed(1)} (with / without balls)`);
 

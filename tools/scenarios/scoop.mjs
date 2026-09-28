@@ -11,7 +11,7 @@
 //   node tools/check-html.mjs <html|url> --scenario scoop [--gpu]
 
 import { installAutopilot, runLegs } from './lib/autopilot.mjs';
-import { FPS, RELEASE_CAMERA } from './lib/camera.mjs';
+import { FPS, RELEASE_CAMERA, parkCamera as placeCamera } from './lib/camera.mjs';
 
 /** A free ball may end a frame this deep in the tractor's boxes (a box shoves it out within the step). */
 const IN_BOX_TOLERANCE = 0.06;
@@ -52,7 +52,8 @@ const PROBES = `(() => {
       view.data.readBall(i, drawn);
       p.drawnOff = Math.max(p.drawnOff, Math.abs(drawn.x - b.x[i]), Math.abs(drawn.y - b.y[i]), Math.abs(drawn.z - b.z[i]));
     }
-    if (b.heldCount !== n) p.strayHeld++;
+    // Held = carried + flying into the shredder + shredded (the route keeps clear of the shredder anyway).
+    if (b.heldCount !== n + zm.shredder.inFlight + b.removedCount) p.strayHeld++;
     if (p.pauseWhen && p.pauseWhen()) {
       p.pauseWhen = null;
       p.paused = true;
@@ -65,11 +66,6 @@ const PROBES = `(() => {
 /** Where the bucket's middle is on the ground (world XZ). */
 const BUCKET_MIDDLE = `(() => { const tr = __zm.tractor, s = __zm.bucket.load.shape, m = (s.minZ + s.maxZ) / 2;
   return { x: tr.x + Math.sin(tr.yaw) * m, z: tr.z + Math.cos(tr.yaw) * m }; })()`;
-
-/** Parks the camera over a ground point with a field of view; works while the game is paused too. */
-const placeCamera = (x, z, fov) => `(() => { const c = __zm.camera; c.update = () => {}; c.snap(${x}, 0, ${z});
-  const node = cc.find('Main Camera'); node.setPosition(c.position.x, c.position.y, c.position.z);
-  node.getComponent(cc.js.getClassByName('cc.Camera')).fov = ${fov}; })()`;
 
 /** Orientation quaternions of the carried balls, the tractor's heading and whether the pile sleeps. */
 const SPIN_SNAP = `(() => { const d = __zm.ballView.data, bk = __zm.bucket, n = bk.count, spins = [];
@@ -89,12 +85,14 @@ const turnY = (a, v) => [v[0] * Math.cos(a) + v[2] * Math.sin(a), v[1], -v[0] * 
 
 // From the start spot (9, -11, facing +Z) west into the strip of carpet north of the gate apron.
 const INTO = [{ name: 'into the carpet', kind: 'goto', x: 3, z: -11 }];
-// With a full bucket through the thick of the carpet.
+// With a full bucket through the thick of the carpet, clear of the shredder's hand-in zone
+// (|dx|, |dz| <= 3.5 around (5.75, -1.85): the bucket would be emptied there).
 const FULL_THROUGH = [
   { name: 'full: west', kind: 'goto', x: 3, z: -9 },
-  { name: 'full: north', kind: 'goto', x: 2, z: -5 },
-  { name: 'full: east', kind: 'goto', x: 8, z: -3 },
-  { name: 'full: north-east', kind: 'goto', x: 12, z: 4 },
+  { name: 'full: south-west', kind: 'goto', x: 1, z: -7 },
+  { name: 'full: north', kind: 'goto', x: 1, z: 2 },
+  { name: 'full: east', kind: 'goto', x: 9, z: 5 },
+  { name: 'full: north-east', kind: 'goto', x: 12, z: 8 },
 ];
 // Sharp turns: a zigzag with short legs.
 const ZIGZAG = [
