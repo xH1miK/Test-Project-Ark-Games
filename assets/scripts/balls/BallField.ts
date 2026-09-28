@@ -70,8 +70,10 @@ export interface BallPusher {
 
 /**
  * A rectangle on the ground (world XZ) balls are kept off while it is active, e.g. a pay pad's plate:
- * a ball whose centre is inside rolls off toward the nearest edge at least `speed` units/s. It works
- * before the pusher, so the tractor can still shove balls onto it (and never into itself).
+ * a ball on the floor whose centre is inside rolls off toward the nearest edge at least `speed` units/s.
+ * It works before the pusher, so the tractor can still shove balls onto it (and never into itself).
+ * A ball up on others falls once the ones under it have left; one resting on balls outside only
+ * overhangs the zone's edge (pushing it into them would never end).
  */
 export interface ClearZone {
   readonly minX: number;
@@ -105,6 +107,8 @@ const HOP_SHARE = 0.25;
 const TELEPORT = 3;
 /** Most push-out passes against the static obstacles per constraint (pockets between rotated rocks). */
 const OBSTACLE_PASSES = 4;
+/** Clear zones move balls whose centres are lower than this many radii (on the floor, not up on others). */
+const ZONE_FLOOR = 1.5;
 
 export class BallField {
   /** Ball centres, world units (views read them). */
@@ -574,35 +578,6 @@ export class BallField {
         bx += kerbPush(x[i] - loX, band, kerb) - kerbPush(hiX - x[i], band, kerb);
         bz += kerbPush(z[i] - loZ, band, kerb) - kerbPush(hiZ - z[i], band, kerb);
       }
-      // A ball on a kept-clear zone rolls off it through the nearest edge, resting or not.
-      const zone = this.liveZones.length > 0 ? this.zoneAt(x[i], z[i]) : null;
-      if (zone) {
-        const toMinX = x[i] - zone.minX;
-        const toMaxX = zone.maxX - x[i];
-        const toMinZ = z[i] - zone.minZ;
-        const toMaxZ = zone.maxZ - z[i];
-        let ex = -1;
-        let ez = 0;
-        let best = toMinX;
-        if (toMaxX < best) {
-          best = toMaxX;
-          ex = 1;
-        }
-        if (toMinZ < best) {
-          best = toMinZ;
-          ex = 0;
-          ez = -1;
-        }
-        if (toMaxZ < best) {
-          ex = 0;
-          ez = 1;
-        }
-        const along = bx * ex + bz * ez;
-        if (along < zone.speed) {
-          bx += (zone.speed - along) * ex;
-          bz += (zone.speed - along) * ez;
-        }
-      }
       let mx = bx * dt;
       let my = by * dt;
       let mz = bz * dt;
@@ -745,8 +720,8 @@ export class BallField {
   }
 
   /**
-   * The hard limits of one ball, the last word last: floor, pusher, field edges, then the static
-   * obstacles (a ball sunk in a rock would show; the edges are only a safety net behind the rocks).
+   * The hard limits of one ball, the last word last: floor, clear zones, pusher, field edges, then the
+   * static obstacles (a ball sunk in a rock would show; the edges are only a safety net behind the rocks).
    */
   private constrain(i: number, pusher: BallPusher | null, first: boolean, dt: number): void {
     const { x, y, z } = this;
@@ -755,6 +730,7 @@ export class BallField {
       y[i] = r;
       this.flags[i] |= ON_FLOOR | SUPPORTED;
     }
+    if (this.liveZones.length > 0 && y[i] < ZONE_FLOOR * r) this.clearOff(i, dt);
     if (pusher) this.shove(i, pusher.pusherBoxes, first, dt);
     const { bounds } = this.settings;
     x[i] = clamp(x[i], bounds.minX + r, bounds.maxX - r);
@@ -765,6 +741,41 @@ export class BallField {
       x[i] = this.resolved.x;
       z[i] = this.resolved.z;
     }
+  }
+
+  /**
+   * Moves a ball on the floor of a kept-clear zone toward the zone's nearest edge, so that it has gone
+   * at least the zone's speed × dt that way in this step (counting how far it already moved). A move
+   * rather than a speed: a rolling ball would ride up onto the resting balls outside, a moved one shoves
+   * them aside, so a crowd round the zone cannot keep it in.
+   */
+  private clearOff(i: number, dt: number): void {
+    const zone = this.zoneAt(this.x[i], this.z[i]);
+    if (!zone) return;
+    const px = this.x[i];
+    const pz = this.z[i];
+    let ex = -1;
+    let ez = 0;
+    let gap = px - zone.minX;
+    if (zone.maxX - px < gap) {
+      gap = zone.maxX - px;
+      ex = 1;
+    }
+    if (pz - zone.minZ < gap) {
+      gap = pz - zone.minZ;
+      ex = 0;
+      ez = -1;
+    }
+    if (zone.maxZ - pz < gap) {
+      gap = zone.maxZ - pz;
+      ex = 0;
+      ez = 1;
+    }
+    const done = (px - this.sx[i]) * ex + (pz - this.sz[i]) * ez;
+    const move = Math.min(zone.speed * dt - done, gap + 1e-3);
+    if (move <= 0) return;
+    this.x[i] += ex * move;
+    this.z[i] += ez * move;
   }
 
   /**
@@ -910,8 +921,8 @@ export class BallField {
       vy[i] = nvy;
       vz[i] = nvz;
       if (moved2 > 0) this.markMoved(i);
-      // A ball still on a kept-clear zone (jammed by its neighbours) stays awake until it is off.
-      const onZone = this.liveZones.length > 0 && this.zoneAt(x[i], z[i]) !== null;
+      // A ball still on the floor of a kept-clear zone (jammed by its neighbours) stays awake until it is off.
+      const onZone = this.liveZones.length > 0 && y[i] < ZONE_FLOOR * this.radius && this.zoneAt(x[i], z[i]) !== null;
       if (!supported || moved2 > still2 || nvx !== 0 || nvy !== 0 || nvz !== 0 || onZone) this.heatAround(cellOf[i]);
     }
   }

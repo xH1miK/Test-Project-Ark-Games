@@ -6,6 +6,7 @@ import { PayPace } from '../../assets/scripts/economy/PayPace.ts';
 import { PayPad } from '../../assets/scripts/economy/PayPad.ts';
 import { Progression } from '../../assets/scripts/economy/Progression.ts';
 import { Purse } from '../../assets/scripts/economy/Purse.ts';
+import { LEVEL, driveLegs, makeWorld } from './ball-world.mjs';
 
 const PADS = Config.pads;
 const FX = Config.coinFx;
@@ -207,4 +208,60 @@ test('progression: the upgrade pad hides until the first hand-in, then pops up o
   for (let k = 0; k < 180; k++) progression.step(1 / 60);
   assert.ok(gate.paid);
   assert.equal(purse.total, 600);
+});
+
+/** Free balls with centres in a rectangle. */
+const ballsIn = (balls, r) => { let n = 0; for (let i = 0; i < balls.count; i++) if (!balls.isHeld(i) && balls.x[i] >= r.minX && balls.x[i] <= r.maxX && balls.z[i] >= r.minZ && balls.z[i] <= r.maxZ) n++; return n; };
+
+test('the real arena at 60 and 10 fps: sell, the upgrade pad pops up clear, a partial payment stays, the rest, MAX; the ledger every frame', () => {
+  for (const fps of [60, 10]) {
+    const world = makeWorld({ shredder: true, pads: true });
+    const { balls, purse, coins, shredder, pads } = world;
+    let granted = 0;
+    const setPurse = (total) => {
+      const diff = total - purse.total;
+      if (diff >= 0) purse.add(diff);
+      granted += diff >= 0 ? diff : -purse.spend(-diff);
+    };
+    const have = () => purse.total + coins.pending + pads.upgrade.stored + pads.upgrade.inFlight + pads.gate.stored + pads.gate.inFlight;
+    let worst = 0;
+    // What the upgrade pad held (landed + flying to it) when the tractor last left its zone.
+    let wasIn = false;
+    let leftWith = -1;
+    // Checked before every frame, i.e. after the previous one.
+    const nextDt = () => {
+      worst = Math.max(worst, Math.abs(have() - (Config.economy.coinsPerBall * shredder.shredded + granted)));
+      if (wasIn && !pads.upgrade.inZone) leftWith = pads.upgrade.stored + pads.upgrade.inFlight;
+      wasIn = pads.upgrade.inZone;
+      return 1 / fps;
+    };
+    const drive = (legs) => {
+      const results = driveLegs(world, legs, nextDt);
+      assert.ok(results.every((r) => r.ok), JSON.stringify(results));
+    };
+    // A plate itself must be bare; balls up on others may overhang the clear margin round it.
+    assert.equal(ballsIn(balls, pads.gate.clearZone), 0, 'the gate plate and its margin are bare from the start');
+    assert.ok(!pads.upgrade.shown && pads.gate.shown);
+    const onUpgradePlate = ballsIn(balls, LEVEL.plates.upgrade);
+    drive([{ kind: 'goto', x: 3, z: -11 }, { kind: 'goto', x: 3, z: -4.8, radius: 0.4 }, { kind: 'stop', time: 0.3 }]);
+    assert.ok(pads.upgrade.shown, 'the first hand-in shows the upgrade pad');
+    drive([{ kind: 'goto', x: 0.8, z: -4.8, radius: 0.6 }, { kind: 'stop', time: 2 }]);
+    assert.ok(onUpgradePlate > 10);
+    assert.equal(ballsIn(balls, LEVEL.plates.upgrade), 0, `the ${onUpgradePlate} balls on its plate were thrown clear (${fps} fps)`);
+    assert.equal(balls.simulatedCount, 0, 'and everything is asleep again');
+    setPurse(40);
+    drive([{ kind: 'goto', x: 0.8, z: 2.4, radius: 0.6 }, { kind: 'goto', x: 5.2, z: 2.4, radius: 0.4 }, { kind: 'stop', time: 2.5 }]);
+    // Driving off it takes until the pivot is out of the zone (coins the throat paid late go on too).
+    drive([{ kind: 'goto', x: -1, z: 3, radius: 0.6 }, { kind: 'stop', time: 1.5 }]);
+    const partial = pads.upgrade.stored;
+    assert.ok(partial >= 40 && partial < 100 && !pads.upgrade.closed, `partial payment ${partial} at ${fps} fps`);
+    assert.equal(partial, leftWith, 'kept as it was when the tractor left the zone');
+    assert.equal(pads.upgrade.owed, 100 - partial);
+    setPurse(150);
+    drive([{ kind: 'goto', x: 5, z: 2.5, radius: 0.4 }, { kind: 'stop', time: 3 }]);
+    assert.ok(pads.upgrade.paid && pads.upgrade.closed, 'paid and closed');
+    assert.equal(purse.total, 150 - (100 - partial), 'took exactly what was owed');
+    assert.equal(pads.upgrade.clearZone.active, false);
+    assert.equal(worst, 0, `purse + coins in the air + on the pads = 2 x shredded + granted, every frame (${fps} fps)`);
+  }
 });

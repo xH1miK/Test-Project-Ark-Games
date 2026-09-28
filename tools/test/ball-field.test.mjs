@@ -4,7 +4,7 @@ import { Config, PusherFace } from '../../assets/scripts/core/Config.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
 import { layCarpet, mulberry32 } from '../../assets/scripts/balls/BallCarpet.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
-import { BALLS_SCENARIO_ROUTE, CARPET_ROUTE, LEVEL, arenaGrid, autopilot, driveLegs, frame, makeWorld, measure } from './ball-world.mjs';
+import { BALLS_SCENARIO_ROUTE, CARPET_ROUTE, LEVEL, arenaGrid, autopilot, clearRect, driveLegs, frame, makeWorld, measure } from './ball-world.mjs';
 
 const R = Config.balls.radius;
 const D = 2 * R;
@@ -546,9 +546,11 @@ test('burst: balls within the radius fly outward, fastest at the centre; the res
 test('a pad popping up in the real carpet: its plate is cleared, no ball leaves the arena, the carpet sleeps again', () => {
   const world = makeWorld();
   const pad = LEVEL.spots.upgradePad;
-  const zone = zoneOf(pad.x - 2.4, pad.x + 2.4, pad.z - 0.95, pad.z + 0.95);
+  const margin = clearRect(LEVEL.plates.upgrade);
+  const zone = zoneOf(margin.minX, margin.maxX, margin.minZ, margin.maxZ);
+  const plate = zoneOf(LEVEL.plates.upgrade.minX, LEVEL.plates.upgrade.maxX, LEVEL.plates.upgrade.minZ, LEVEL.plates.upgrade.maxZ);
   world.balls.addClearZone(zone);
-  const onPlate = insideZone(world.balls, zone).length;
+  const onPlate = insideZone(world.balls, plate).length;
   assert.ok(onPlate > 10, `${onPlate} balls on the plate before`);
   const { radius, speed, hop } = Config.pads.burst;
   world.balls.burst(pad.x, pad.z, radius, speed, hop);
@@ -561,7 +563,9 @@ test('a pad popping up in the real carpet: its plate is cleared, no ball leaves 
   assert.equal(m.nan, 0);
   assert.equal(m.outside, 0);
   assert.ok(m.wall < 1e-9);
-  assert.equal(insideZone(world.balls, zone).length, 0, 'the plate is clear');
+  assert.equal(insideZone(world.balls, plate).length, 0, 'the plate is clear');
+  // In the margin only balls up on others (resting on the crowd outside) may overhang.
+  for (const i of insideZone(world.balls, zone)) assert.ok(world.balls.y[i] >= 1.5 * R, `ball ${i} on the floor of the margin`);
   assert.ok(asleepAt > 0, 'asleep within 6 s');
   assert.ok(m.overlap < 0.035, `overlap at rest ${m.overlap}`);
 });

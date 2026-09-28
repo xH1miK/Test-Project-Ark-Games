@@ -208,7 +208,7 @@ export default async function longRun(t) {
   t.log(`end: shredded ${end.shredded} of ${total} (${Math.round((100 * end.shredded) / total)}%; handed in ${end.handed}, throat ${end.swallowed}), purse ${end.purse}; ` +
     `at rest: ${idleUploads} uploads in 30 frames, ${drawsAtRest} draw calls, fps ${fpsOn.toFixed(1)} with the balls / ${fpsOff.toFixed(1)} without`);
   t.check(end.shredded + end.inFlight >= last.share * total, `the carpet was swept down to ${Math.round(100 * last.share)}% (${end.shredded} of ${total})`);
-  t.check(end.purse === 2 * end.shredded, `purse ${end.purse} = 2 x ${end.shredded} shredded`);
+  t.check(end.purse + end.pads === 2 * end.shredded, `purse ${end.purse} + pads ${end.pads} = 2 x ${end.shredded} shredded`);
   t.check(idleUploads === 0, 'at rest the ball buffer is not uploaded (30 frames)');
   await checkLoopProbe(t, end, 60);
 

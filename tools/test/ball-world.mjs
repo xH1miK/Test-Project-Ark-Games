@@ -8,6 +8,8 @@ import { EventBus } from '../../assets/scripts/core/Events.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
 import { layCarpet } from '../../assets/scripts/balls/BallCarpet.ts';
 import { CoinFlights } from '../../assets/scripts/economy/CoinFlights.ts';
+import { PayPad } from '../../assets/scripts/economy/PayPad.ts';
+import { Progression } from '../../assets/scripts/economy/Progression.ts';
 import { Purse } from '../../assets/scripts/economy/Purse.ts';
 import { Shredder } from '../../assets/scripts/economy/Shredder.ts';
 import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
@@ -30,6 +32,10 @@ export const SHREDDER_POSE = (() => {
   return { x: s.x, y: s.y, z: s.z, yaw: (s.yaw * Math.PI) / 180 };
 })();
 
+/** A pad's plate grown by the clear margin: the zone balls are kept off (as GameRoot builds it). */
+export const clearRect = (plate, margin = Config.pads.clearMargin) =>
+  ({ minX: plate.minX - margin, maxX: plate.maxX + margin, minZ: plate.minZ - margin, maxZ: plate.maxZ + margin });
+
 export function arenaGrid() {
   const grid = new ObstacleGrid(LEVEL.bounds, LEVEL.cellSize);
   for (const o of LEVEL.obstacles) grid.add(o, o.mask);
@@ -39,13 +45,20 @@ export function arenaGrid() {
 /**
  * Arena + carpet + tractor on its start spot, and the bucket unless `bucket: false` (then the bucket
  * box only pushes, as before M5). With `shredder: true` also the shredder on its spot, the purse and
- * the coins in the air, wired the way GameRoot wires them (an event bus is made if none is given).
- * `settings` overrides Config.balls.
+ * the coins in the air; with `pads: true` (needs the shredder) also the pay pads on their spots with
+ * their plates from the fixture and the progression (the gate's plate is a hole in the carpet): all
+ * wired the way GameRoot wires them (an event bus is made if none is given). `settings` overrides
+ * Config.balls.
  */
-export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = true, shredder = false, events = null } = {}) {
+export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = true, shredder = false, pads = false, events = null } = {}) {
   const grid = arenaGrid();
   const ballSettings = { ...Config.balls, ...settings };
-  const centres = carpet ? layCarpet(ballSettings.carpet, ballSettings.radius, ballSettings.maxCount, grid) : new Float64Array(0);
+  let carpetSpec = ballSettings.carpet;
+  if (pads) {
+    const r = clearRect(LEVEL.plates.gate);
+    carpetSpec = { ...carpetSpec, holes: [...carpetSpec.holes, { kind: 'box', x: (r.minX + r.maxX) / 2, z: (r.minZ + r.maxZ) / 2, halfX: (r.maxX - r.minX) / 2, halfZ: (r.maxZ - r.minZ) / 2 }] };
+  }
+  const centres = carpet ? layCarpet(carpetSpec, ballSettings.radius, ballSettings.maxCount, grid) : new Float64Array(0);
   const balls = new BallField(ballSettings, Math.max(64, centres.length / 2 + 64), grid);
   for (let k = 0; k < centres.length; k += 2) balls.add(centres[k], ballSettings.radius, centres[k + 1]);
   const tractor = new TractorModel(Config.tractor, Config.tractor.tiers[tier], grid);
@@ -53,19 +66,31 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
   tractor.place(start.x, start.z, (start.yaw * Math.PI) / 180);
   const bus = events ?? (shredder ? new EventBus() : null);
   const scoop = bucket ? new Bucket({ ...BUCKET_SETTINGS, radius: ballSettings.radius, gravity: ballSettings.gravity }, balls, tractor, BUCKET_SLOTS, bus) : null;
-  const world = { grid, balls, tractor, bucket: scoop, settings: ballSettings, events: bus, shredder: null, purse: null, coins: null };
+  const world = { grid, balls, tractor, bucket: scoop, settings: ballSettings, events: bus, shredder: null, purse: null, coins: null, pads: null, progression: null };
   if (shredder) {
     world.shredder = new Shredder(SHREDDER_SETTINGS, SHREDDER_POSE, balls, scoop, tractor, bus);
     world.purse = new Purse(bus);
     world.coins = new CoinFlights(Config.coinFx, world.purse);
     bus.on('coinsEarned', ({ amount, x, y, z }) => world.coins.launch(amount, x, y, z));
   }
+  if (pads) {
+    const { upgradePrice, gatePrice } = Config.economy;
+    const spots = LEVEL.spots;
+    const upgrade = new PayPad('upgrade', Config.pads, spots.upgradePad, upgradePrice, world.purse, tractor, Config.coinFx, bus,
+      { shown: false, plate: clearRect(LEVEL.plates.upgrade) });
+    const gate = new PayPad('gate', Config.pads, spots.gatePad, gatePrice, world.purse, tractor, Config.coinFx, bus,
+      { shown: true, plate: clearRect(LEVEL.plates.gate) });
+    balls.addClearZone(upgrade.clearZone);
+    balls.addClearZone(gate.clearZone);
+    world.pads = { upgrade, gate };
+    world.progression = new Progression(Config.pads, upgrade, gate, balls, bus);
+  }
   return world;
 }
 
 /**
  * One frame the way GameRoot runs it: split into steps of at most Config.time.maxStep (tractor, scoop,
- * balls, carry, shredder), then the coins in the air.
+ * balls, carry, shredder), then the coins in the air, then the pay pads.
  */
 export function frame(world, dt, inputX, inputZ, onStep) {
   const steps = Math.ceil(dt / Config.time.maxStep - 1e-9);
@@ -79,6 +104,7 @@ export function frame(world, dt, inputX, inputZ, onStep) {
     onStep?.();
   }
   world.coins?.update(dt);
+  world.progression?.step(dt);
 }
 
 /** Steers toward waypoints in turn: returns the stick for this frame, or null when the route is done. */

@@ -281,8 +281,11 @@ export const Config = {
     zoneHalf: 3.1,
     fillTime: 1.55,
     interval: 0.07,
-    /** Balls are kept this far off a shown, unpaid pad's plate (beyond its drawn edge), units. */
-    clearMargin: 0.3,
+    /**
+     * Balls are kept this far off a shown, unpaid pad's plate (beyond its drawn edge), units. The example
+     * keeps 0.3; seen from the camera at 45° a ball that close still covers the plate's near edge.
+     */
+    clearMargin: 0.5,
     /** A ball on a kept-clear pad rolls off it toward the nearest edge at least this fast, units/s. */
     clearSpeed: 3,
     /** A pad popping up in the carpet throws the balls within `radius` outward (speed at its centre, units/s; hop share of it). */
