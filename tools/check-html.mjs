@@ -8,7 +8,8 @@
 //
 // A file is opened from file:// (the real ad-network condition); an http URL (e.g. the editor preview)
 // is handy while iterating. The page runs as a phone: mobile viewport, DPR 2, touch screen.
-// --webgl1 hides WebGL 2 from the page (as on an old phone), so the engine falls back to WebGL 1.
+// --webgl1 hides WebGL 2 from the page (as on an old phone), so the engine falls back to WebGL 1;
+// --hide-ext EXT_frag_depth (repeatable) hides a WebGL extension, as on a GPU without it.
 // Env: CHROME_PATH to override the browser. Exit code 1 if any check fails.
 
 import { spawn } from 'node:child_process';
@@ -26,6 +27,7 @@ const takeAll = (name) => {
 const sizes = takeAll('--size');
 const useGpu = argv.includes('--gpu') && Boolean(argv.splice(argv.indexOf('--gpu'), 1));
 const webgl1 = argv.includes('--webgl1') && Boolean(argv.splice(argv.indexOf('--webgl1'), 1));
+const hiddenExtensions = takeAll('--hide-ext');
 const waitSec = Number(takeAll('--wait')[0] || 15);
 const scenarioName = takeAll('--scenario')[0];
 const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1'].filter(Boolean);
@@ -161,7 +163,8 @@ function scenarioContext(cdp, size, results) {
 
 let failed = false;
 console.log(`${label}${isHttp ? '' : `  (${(readFileSync(target).length / 1e6).toFixed(3)} MB)`} in ${basename(exe)}` +
-  ` (${useGpu ? 'GPU' : 'SwiftShader'}${webgl1 ? ', WebGL 1 forced' : ''})` + (scenarioName ? `, scenario: ${scenarioName}` : ''));
+  ` (${useGpu ? 'GPU' : 'SwiftShader'}${webgl1 ? ', WebGL 1 forced' : ''}${hiddenExtensions.map((e) => `, no ${e}`).join('')})` +
+  (scenarioName ? `, scenario: ${scenarioName}` : ''));
 mkdirSync(shotsDir, { recursive: true });
 
 await withBrowser(async (cdp) => {
@@ -183,6 +186,17 @@ await withBrowser(async (cdp) => {
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
       const getContext = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return type === 'webgl2' ? null : getContext.call(this, type, ...rest); };
+    })()` });
+  }
+  if (hiddenExtensions.length) {
+    // An extension never enabled through getExtension is not available to shaders either.
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+      const hidden = ${JSON.stringify(hiddenExtensions)};
+      for (const proto of [WebGLRenderingContext.prototype, window.WebGL2RenderingContext && WebGL2RenderingContext.prototype].filter(Boolean)) {
+        const get = proto.getExtension, list = proto.getSupportedExtensions;
+        proto.getExtension = function (name) { return hidden.includes(name) ? null : get.call(this, name); };
+        proto.getSupportedExtensions = function () { return (list.call(this) || []).filter((n) => !hidden.includes(n)); };
+      }
     })()` });
   }
 
