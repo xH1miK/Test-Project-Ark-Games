@@ -13,6 +13,7 @@ import { Shredder } from '../../assets/scripts/economy/Shredder.ts';
 import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
+import { PHASES, pickFillTarget, roundLegs, sweepFrame } from '../scenarios/lib/sweep.mjs';
 
 /** The bucket's settings the way GameRoot builds them. */
 export const BUCKET_SETTINGS = { ...Config.bucket, radius: Config.balls.radius, gravity: Config.balls.gravity };
@@ -263,43 +264,133 @@ export function accountHeld(world) {
 /**
  * Drives legs in the format of the browser scenarios' autopilot (tools/scenarios/lib/autopilot.mjs),
  * with its rules: { kind: 'goto', x, z, radius? } | { kind: 'push', dx, dz, time } |
- * { kind: 'stop', time } (ends once the tractor stands still), plus { kind: 'tier', index }.
- * `nextDt()` gives each frame's time.
+ * { kind: 'stop', time } (ends once the tractor stands still) | { kind: 'seek', target, radius?, stall? },
+ * each with an optional `until` and timeout (s, default 20), plus { kind: 'tier', index }. `nextDt()`
+ * gives each frame's time; `targets` are the seek legs' point sources, (leg, stalled) => point | null;
+ * `until` adds conditions to the built-in `full` and `inZone`. Returns one result per driven leg.
  */
-export function driveLegs(world, legs, nextDt) {
+export function driveLegs(world, legs, nextDt, { targets = {}, until = {} } = {}) {
   const { tractor, balls } = world;
+  const conditions = { full: () => world.bucket.full, inZone: () => world.shredder.inZone, ...until };
+  const results = [];
   for (const leg of legs) {
     if (leg.kind === 'tier') {
       tractor.setTier(Config.tractor.tiers[leg.index]);
       continue;
     }
-    const fromX = tractor.x;
-    const fromZ = tractor.z;
-    let x = 0;
-    let z = 0;
-    for (let t = 0; ; ) {
-      if (leg.kind === 'goto') {
-        const dx = leg.x - tractor.x;
-        const dz = leg.z - tractor.z;
-        const d = Math.hypot(dx, dz);
-        if (d <= (leg.radius || 1) || dx * (leg.x - fromX) + dz * (leg.z - fromZ) <= 0) break;
+    const radius = leg.radius || 1;
+    let t = 0;
+    let point = leg;
+    let fromX = tractor.x;
+    let fromZ = tractor.z;
+    let best = Infinity;
+    let bestAt = 0;
+    let picks = 0;
+    const aim = (stalled) => {
+      point = targets[leg.target](leg, stalled);
+      picks++;
+      if (!point) return false;
+      fromX = tractor.x;
+      fromZ = tractor.z;
+      best = Infinity;
+      bestAt = t;
+      return true;
+    };
+    let reason = leg.kind === 'seek' && !aim(null) ? 'none left' : null;
+    while (!reason) {
+      let x = 0;
+      let z = 0;
+      if (leg.until && conditions[leg.until]()) {
+        reason = leg.until;
+        break;
+      }
+      if (leg.kind === 'goto' || leg.kind === 'seek') {
+        let dx = point.x - tractor.x;
+        let dz = point.z - tractor.z;
+        let d = Math.hypot(dx, dz);
+        const passed = dx * (point.x - fromX) + dz * (point.z - fromZ) <= 0;
+        if (leg.kind === 'goto') {
+          if (d <= radius || passed) {
+            reason = d <= radius ? 'reached' : 'passed';
+            break;
+          }
+        } else {
+          if (d < best - 0.25) {
+            best = d;
+            bestAt = t;
+          }
+          const stalled = t - bestAt > (leg.stall || 1.5);
+          if (d <= radius || passed || stalled) {
+            if (!aim(stalled ? point : null)) {
+              reason = 'none left';
+              break;
+            }
+            dx = point.x - tractor.x;
+            dz = point.z - tractor.z;
+            d = Math.hypot(dx, dz);
+          }
+        }
         x = dx / d;
         z = dz / d;
       } else if (leg.kind === 'push') {
-        if (t >= leg.time) break;
+        if (t >= leg.time) {
+          reason = 'time';
+          break;
+        }
         x = leg.dx;
         z = leg.dz;
-      } else {
-        x = 0;
-        z = 0;
-        if (t >= leg.time && tractor.speed === 0) break;
+      } else if (t >= leg.time && tractor.speed === 0) {
+        reason = 'stopped';
+        break;
+      }
+      if (t > (leg.timeout || 20)) {
+        reason = 'timeout';
+        break;
       }
       const dt = nextDt();
       frame(world, dt, x, z);
       balls.clearMoved();
       t += dt;
     }
+    results.push({ name: leg.name, ok: reason !== 'timeout', reason, t, picks });
   }
+  return results;
+}
+
+/**
+ * The browser `long-run` scenario on the pure models (tools/scenarios/lib/sweep.mjs): per phase the
+ * tractor's tier, then rounds of a fill-up near the next tour point and a hand-in at the shredder
+ * until the phase's share of the carpet is shredded. The world needs the shredder. `nextDt()` gives
+ * each frame's time; `onRound(round)` sees every round as it ends. Returns the rounds:
+ * { phase, round, fill, sell (leg results), filled (balls when the fill-up ended), sold (the hand-in
+ * as the pivot entered the zone) }.
+ */
+export function longRun(world, nextDt, onRound) {
+  const { balls, bucket, shredder, tractor } = world;
+  const frameOptions = sweepFrame(SHREDDER_POSE, Config.shredder.zoneHalf);
+  const tabu = [];
+  const targets = {
+    balls: (leg, stalled) => {
+      if (stalled) tabu.push(stalled.cell);
+      return pickFillTarget(balls, tractor, { ...frameOptions, toward: leg.toward, minMass: leg.minMass, clearance: leg.clearance, tabu, obstacles: world.grid });
+    },
+  };
+  const rounds = [];
+  let round = 0;
+  for (const [phase, { tier, share, maxRounds }] of PHASES.entries()) {
+    tractor.setTier(Config.tractor.tiers[tier]);
+    for (let k = 0; k < maxRounds && shredder.shredded + shredder.inFlight < share * balls.count; k++, round++) {
+      const [fillLeg, sellLeg] = roundLegs(round, tier, SHREDDER_POSE);
+      const [fill] = driveLegs(world, [fillLeg], nextDt, { targets });
+      const filled = bucket.count;
+      const handed = shredder.handedIn;
+      const [sell] = driveLegs(world, [sellLeg], nextDt);
+      const entry = { phase, round, fill, sell, filled, sold: shredder.handedIn - handed };
+      rounds.push(entry);
+      onRound?.(entry);
+    }
+  }
+  return rounds;
 }
 
 /** The route of the browser `balls` scenario on 28.09: a short push into the carpet, T1 through it, then T2. */
