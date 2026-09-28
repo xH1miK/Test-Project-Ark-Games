@@ -17,9 +17,11 @@ import sharp from 'sharp';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /**
- * name -> { src (in art-src/), out (project path), size (px, square fit), format, quality, palette, tiling, crop, ring }
+ * name -> { src (in art-src/), out (project path), size (px, square fit) or height (px, width by the
+ * aspect), format, quality, palette, tiling, crop, ring }
  * crop 'circle': a square centred on the solid shape (alpha > 128) that still holds its soft glow and
  * shadow (alpha > 10), so a round sprite is centred on its node and fills it edge to edge.
+ * crop 'trim': the smallest box holding every visible pixel (alpha > 10), e.g. a panel with a shadow.
  * ring: squeeze a ring sprite toward its outer edge until its band is this fraction of the outer radius
  * thick (shading, outlines and glow are kept, just narrower). Needs crop 'circle'.
  */
@@ -28,6 +30,10 @@ const SPECS = {
   // The generated ring's band is 0.33 of its radius; the user asked for a thin one (27.09).
   joystickBase: { src: 'joystick_base.png', out: 'assets/textures/ui/joystick_base.png', size: 320, format: 'png', palette: true, quality: 90, crop: 'circle', ring: 0.12 },
   joystickKnob: { src: 'joystick_knob.png', out: 'assets/textures/ui/joystick_knob.png', size: 160, format: 'png', palette: true, quality: 90, crop: 'circle' },
+  // HUD coin counter: icon 128 (the coin flights of the juice stage reuse it), plate 90 high (drawn
+  // sliced: its rounded ends keep their shape at any width).
+  coin: { src: 'coin.png', out: 'assets/textures/ui/coin.png', size: 128, format: 'png', palette: true, quality: 90, crop: 'circle' },
+  coinPlate: { src: 'coin_plate.png', out: 'assets/textures/ui/coin_plate.png', height: 90, format: 'png', palette: true, quality: 90, crop: 'trim' },
 };
 
 /**
@@ -126,6 +132,21 @@ async function circleCrop(file) {
   return sharp(padded).extract({ left: left + pad.left, top: top + pad.top, width: 2 * half, height: 2 * half });
 }
 
+/** The smallest box around every visible pixel (alpha > 10). */
+async function trimCrop(file) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+  let x0 = width, y0 = height, x1 = -1, y1 = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * channels + 3] <= 10) continue;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+  }
+  return sharp(file).extract({ left: x0, top: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 });
+}
+
 const argv = process.argv.slice(2);
 const takeOption = (flag) => {
   const values = [];
@@ -147,9 +168,12 @@ for (const name of names) {
   const out = outDir ? join(outDir, basename(spec.out)) : join(ROOT, spec.out);
   mkdirSync(dirname(out), { recursive: true });
   const src = join(ROOT, 'art-src', spec.src);
-  let source = spec.crop === 'circle' ? sharp(await (await circleCrop(src)).png().toBuffer()) : sharp(src);
+  const crops = { circle: circleCrop, trim: trimCrop };
+  let source = spec.crop ? sharp(await (await crops[spec.crop](src)).png().toBuffer()) : sharp(src);
   if (spec.ring) source = sharp(await (await thinRing(source, spec.ring)).png().toBuffer());
-  const image = source.resize(spec.size, spec.size, { fit: 'inside', kernel: 'lanczos3' });
+  const image = spec.height
+    ? source.resize({ height: spec.height, kernel: 'lanczos3' })
+    : source.resize(spec.size, spec.size, { fit: 'inside', kernel: 'lanczos3' });
   if (spec.format === 'jpeg') image.jpeg({ quality: spec.quality, mozjpeg: true });
   else image.png({ palette: spec.palette ?? false, quality: spec.quality, compressionLevel: 9 });
   await image.toFile(out);

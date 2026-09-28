@@ -11,10 +11,11 @@
  * One step: predict (gravity, friction, kerb) -> contact passes (ball-ball, floor, pusher, static
  * obstacles, field edges) -> velocity from the displacement -> rest and heat.
  *
- * A ball can be held out of the field (the bucket carries it, later it flies into the shredder): it
- * keeps its index but leaves the grid, so it is neither simulated nor anyone's neighbour; its holder
- * moves it with place() and may release() it back. Indices never change, so views can key per-ball
- * data by them.
+ * A ball can be held out of the field (the bucket carries it, it flies into the shredder): it keeps
+ * its index but leaves the grid, so it is neither simulated nor anyone's neighbour; its holder moves
+ * it with place() (a carrier that draws it itself) or moveHeld() (views draw it as a loose ball) and
+ * may release() it back. A ball can also be removed for good (the shredder ate it): it stays held by
+ * nobody and views stop drawing it. Indices never change, so views can key per-ball data by them.
  */
 
 import type { PusherBox, XZBounds } from '../core/Config';
@@ -102,6 +103,8 @@ export class BallField {
   /** Balls moved since the last clearMoved(), in moved[0 .. movedCount): a view redraws only these. */
   readonly moved: Int32Array;
   movedCount = 0;
+  /** 1 for a ball removed from the game for good (views hide it); see remove(). */
+  readonly removed: Uint8Array;
   /** Neighbour pairs tested in the last step (profiling). */
   pairChecks = 0;
 
@@ -116,9 +119,10 @@ export class BallField {
   private readonly kx: Float64Array;
   private readonly kz: Float64Array;
   private readonly flags: Uint8Array;
-  /** 1 for a ball held out of the field (see hold()). */
+  /** 1 for a ball held out of the field (see hold()); removed balls stay held. */
   private readonly held: Uint8Array;
   private heldTotal = 0;
+  private removedTotal = 0;
   /** Step in which a ball was last simulated; equals `stepNo` for the balls of the current step. */
   private readonly stamp: Int32Array;
   private readonly movedMark: Uint8Array;
@@ -167,6 +171,7 @@ export class BallField {
     this.kz = new Float64Array(capacity);
     this.flags = new Uint8Array(capacity);
     this.held = new Uint8Array(capacity);
+    this.removed = new Uint8Array(capacity);
     this.stamp = new Int32Array(capacity);
     this.moved = new Int32Array(capacity);
     this.movedMark = new Uint8Array(capacity);
@@ -230,14 +235,24 @@ export class BallField {
     this.heatRect(x - half, x + half, z - half, z + half);
   }
 
-  /** Balls held out of the field right now. */
+  /** Balls held out of the field right now (carried, flying or removed for good). */
   get heldCount(): number {
     return this.heldTotal;
   }
 
-  /** True when ball i is held out of the field (carried, flying), not simulated by it. */
+  /** Balls removed from the game for good (they count as held too). */
+  get removedCount(): number {
+    return this.removedTotal;
+  }
+
+  /** True when ball i is held out of the field (carried, flying, removed), not simulated by it. */
   isHeld(i: number): boolean {
     return this.held[i] === 1;
+  }
+
+  /** True when ball i was removed from the game for good. */
+  isRemoved(i: number): boolean {
+    return this.removed[i] === 1;
   }
 
   /**
@@ -279,17 +294,44 @@ export class BallField {
     this.kx[i] = this.kz[i] = 0;
   }
 
-  /** Moves a held ball (its holder carries it); views read the new position. Free balls are left alone. */
+  /**
+   * Moves a held ball whose holder draws it (the bucket: views turn carried balls with it); it is not
+   * listed in `moved`. Free and removed balls are left alone.
+   */
   place(i: number, x: number, y: number, z: number): void {
-    if (!this.held[i]) return;
+    if (!this.held[i] || this.removed[i]) return;
     this.x[i] = x;
     this.y[i] = y;
     this.z[i] = z;
   }
 
+  /**
+   * Moves a held ball and lists it in `moved`, so views redraw it as a loose ball (one in flight rolls
+   * along its way). Free and removed balls are left alone.
+   */
+  moveHeld(i: number, x: number, y: number, z: number): void {
+    if (!this.held[i] || this.removed[i]) return;
+    this.x[i] = x;
+    this.y[i] = y;
+    this.z[i] = z;
+    this.markMoved(i);
+  }
+
+  /**
+   * Removes ball i from the game for good (the shredder ate it): it stays out of the field, held by
+   * nobody, keeps its index, and is listed in `moved` once so views stop drawing it.
+   */
+  remove(i: number): void {
+    if (this.removed[i]) return;
+    this.hold(i);
+    this.removed[i] = 1;
+    this.removedTotal++;
+    this.markMoved(i);
+  }
+
   /** Puts a held ball back into the field at (x, y, z) with a velocity; it and its neighbours wake. */
   release(i: number, x: number, y: number, z: number, vx: number, vy: number, vz: number): void {
-    if (!this.held[i]) return;
+    if (!this.held[i] || this.removed[i]) return;
     this.held[i] = 0;
     this.heldTotal--;
     const { bounds } = this.settings;

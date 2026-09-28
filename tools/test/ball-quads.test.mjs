@@ -9,11 +9,11 @@ import { CARPET_ROUTE, autopilot, frame, makeWorld } from './ball-world.mjs';
 const R = Config.balls.radius;
 const LOOK = { sizeJitter: 0.05, shadeJitter: 0.04, seed: 3 };
 
-/** A hand-made ball source: positions plus a moved list. */
+/** A hand-made ball source: positions plus a moved list (and removed flags). */
 const source = (n) => ({
   count: n,
   x: new Float64Array(n), y: new Float64Array(n).fill(R), z: new Float64Array(n),
-  moved: new Int32Array(n), movedCount: 0,
+  moved: new Int32Array(n), movedCount: 0, removed: new Uint8Array(n),
 });
 const move = (src, i, dx, dz) => {
   src.x[i] += dx;

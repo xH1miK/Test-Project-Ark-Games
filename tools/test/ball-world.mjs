@@ -4,8 +4,12 @@
 
 import { readFileSync } from 'node:fs';
 import { Config } from '../../assets/scripts/core/Config.ts';
+import { EventBus } from '../../assets/scripts/core/Events.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
 import { layCarpet } from '../../assets/scripts/balls/BallCarpet.ts';
+import { CoinFlights } from '../../assets/scripts/economy/CoinFlights.ts';
+import { Purse } from '../../assets/scripts/economy/Purse.ts';
+import { Shredder } from '../../assets/scripts/economy/Shredder.ts';
 import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
@@ -14,8 +18,16 @@ import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts
 export const BUCKET_SETTINGS = { ...Config.bucket, radius: Config.balls.radius, gravity: Config.balls.gravity };
 /** Most balls any tier's bucket holds. */
 export const BUCKET_SLOTS = Math.max(...Config.tractor.tiers.map((t) => t.bucketCapacity));
+/** The shredder's settings the way GameRoot builds them. */
+export const SHREDDER_SETTINGS = { ...Config.shredder, coinsPerBall: Config.economy.coinsPerBall };
 
 export const LEVEL = JSON.parse(readFileSync(new URL('./fixtures/level.json', import.meta.url), 'utf8'));
+
+/** Where the shredder stands in the level (Level/Shredder), heading in radians. */
+export const SHREDDER_POSE = (() => {
+  const s = LEVEL.spots.shredder;
+  return { x: s.x, y: s.y, z: s.z, yaw: (s.yaw * Math.PI) / 180 };
+})();
 
 export function arenaGrid() {
   const grid = new ObstacleGrid(LEVEL.bounds, LEVEL.cellSize);
@@ -25,9 +37,11 @@ export function arenaGrid() {
 
 /**
  * Arena + carpet + tractor on its start spot, and the bucket unless `bucket: false` (then the bucket
- * box only pushes, as before M5). `settings` overrides Config.balls.
+ * box only pushes, as before M5). With `shredder: true` also the shredder on its spot, the purse and
+ * the coins in the air, wired the way GameRoot wires them (an event bus is made if none is given).
+ * `settings` overrides Config.balls.
  */
-export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = true, events = null } = {}) {
+export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = true, shredder = false, events = null } = {}) {
   const grid = arenaGrid();
   const ballSettings = { ...Config.balls, ...settings };
   const centres = carpet ? layCarpet(ballSettings.carpet, ballSettings.radius, ballSettings.maxCount, grid) : new Float64Array(0);
@@ -36,11 +50,22 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
   const tractor = new TractorModel(Config.tractor, Config.tractor.tiers[tier], grid);
   const start = LEVEL.spots.tractorStart;
   tractor.place(start.x, start.z, (start.yaw * Math.PI) / 180);
-  const scoop = bucket ? new Bucket({ ...BUCKET_SETTINGS, radius: ballSettings.radius, gravity: ballSettings.gravity }, balls, tractor, BUCKET_SLOTS, events) : null;
-  return { grid, balls, tractor, bucket: scoop, settings: ballSettings };
+  const bus = events ?? (shredder ? new EventBus() : null);
+  const scoop = bucket ? new Bucket({ ...BUCKET_SETTINGS, radius: ballSettings.radius, gravity: ballSettings.gravity }, balls, tractor, BUCKET_SLOTS, bus) : null;
+  const world = { grid, balls, tractor, bucket: scoop, settings: ballSettings, events: bus, shredder: null, purse: null, coins: null };
+  if (shredder) {
+    world.shredder = new Shredder(SHREDDER_SETTINGS, SHREDDER_POSE, balls, scoop, tractor, bus);
+    world.purse = new Purse(bus);
+    world.coins = new CoinFlights(Config.coinFx, world.purse);
+    bus.on('coinsEarned', ({ amount, x, y, z }) => world.coins.launch(amount, x, y, z));
+  }
+  return world;
 }
 
-/** One frame the way GameRoot runs it: split into steps of at most Config.time.maxStep (tractor, scoop, balls, carry). */
+/**
+ * One frame the way GameRoot runs it: split into steps of at most Config.time.maxStep (tractor, scoop,
+ * balls, carry, shredder), then the coins in the air.
+ */
 export function frame(world, dt, inputX, inputZ, onStep) {
   const steps = Math.ceil(dt / Config.time.maxStep - 1e-9);
   const h = dt / steps;
@@ -49,8 +74,10 @@ export function frame(world, dt, inputX, inputZ, onStep) {
     world.bucket?.scoop();
     world.balls.step(h, world.tractor);
     world.bucket?.carry(h);
+    world.shredder?.step(h);
     onStep?.();
   }
+  world.coins?.update(dt);
 }
 
 /** Steers toward waypoints in turn: returns the stick for this frame, or null when the route is done. */
@@ -207,6 +234,30 @@ export function measureLoad(world) {
     placed = Math.max(placed, Math.abs(balls.x[i] - (tractor.x + x * cos + z * sin)), Math.abs(balls.y[i] - y), Math.abs(balls.z[i] - (tractor.z - x * sin + z * cos)));
   }
   return { count: load.count, outside: Math.max(0, outside), overlap: Math.max(0, overlap), lowest, placed, notHeld, heldTotal: balls.heldCount };
+}
+
+/**
+ * Who holds each held ball: every one must be exactly one of carried (in the bucket), flying (into the
+ * shredder) or removed (shredded). `stray`: held by nobody; `twice`: claimed twice, or claimed while free.
+ */
+export function accountHeld(world) {
+  const { balls, bucket, shredder } = world;
+  const carried = new Uint8Array(balls.count);
+  for (let k = 0; k < (bucket?.count ?? 0); k++) carried[bucket.index[k]]++;
+  let held = 0;
+  let stray = 0;
+  let twice = 0;
+  for (let i = 0; i < balls.count; i++) {
+    const roles = carried[i] + (shredder?.flights.isFlying(i) ? 1 : 0) + (balls.isRemoved(i) ? 1 : 0);
+    if (!balls.isHeld(i)) {
+      if (roles > 0) twice++;
+      continue;
+    }
+    held++;
+    if (roles === 0) stray++;
+    else if (roles > 1) twice++;
+  }
+  return { held, carried: bucket?.count ?? 0, flying: shredder?.inFlight ?? 0, removed: balls.removedCount, stray, twice };
 }
 
 /**

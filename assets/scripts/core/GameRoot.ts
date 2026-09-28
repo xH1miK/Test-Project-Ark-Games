@@ -8,12 +8,17 @@ import { BallField } from '../balls/BallField';
 import { BallRenderer } from '../balls/BallRenderer';
 import { CameraRigModel } from '../camera/CameraRigModel';
 import { CameraRigView } from '../camera/CameraRigView';
+import { CoinFlights } from '../economy/CoinFlights';
+import { Purse } from '../economy/Purse';
+import { Shredder } from '../economy/Shredder';
+import { ShredderView } from '../economy/ShredderView';
 import { JoystickModel } from '../input/JoystickModel';
 import { JoystickView } from '../input/JoystickView';
 import { MoveInput } from '../input/MoveInput';
 import { Bucket } from '../tractor/Bucket';
 import { TractorModel } from '../tractor/TractorModel';
 import { TractorView } from '../tractor/TractorView';
+import { CoinHud } from '../ui/CoinHud';
 import type { ObstacleGrid } from '../world/ObstacleGrid';
 import { buildObstacleGrid } from '../world/StaticBlocker';
 
@@ -21,11 +26,17 @@ const { ccclass, property } = _decorator;
 
 const tmpForward = new Vec3();
 
+/** Heading about +Y of a node (Cocos convention: local +Z points to (sin yaw, cos yaw)). */
+function yawOf(node: Node): number {
+  Vec3.transformQuat(tmpForward, Vec3.UNIT_Z, node.worldRotation);
+  return Math.atan2(tmpForward.x, tmpForward.z);
+}
+
 /**
  * Composition root: creates the models, wires them to the scene's views and drives the frame in a
- * fixed order (update: input, then tractor -> scoop -> balls -> carry in steps of at most
- * Config.time.maxStep; lateUpdate: views and camera). The only place that knows every system
- * (Unity analogy: a bootstrap MonoBehaviour).
+ * fixed order (update: input, then tractor -> scoop -> balls -> carry -> shredder in steps of at most
+ * Config.time.maxStep, then the coins in the air; lateUpdate: views and camera). The only place that
+ * knows every system (Unity analogy: a bootstrap MonoBehaviour).
  */
 @ccclass('GameRoot')
 export class GameRoot extends Component {
@@ -47,6 +58,12 @@ export class GameRoot extends Component {
   @property({ type: BallRenderer })
   ballView: BallRenderer | null = null;
 
+  @property({ type: ShredderView, tooltip: 'On the shredder node: the shredder stands where that node is.' })
+  shredderView: ShredderView | null = null;
+
+  @property({ type: CoinHud })
+  coinHud: CoinHud | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -54,12 +71,15 @@ export class GameRoot extends Component {
   private tractor!: TractorModel;
   private balls!: BallField;
   private bucket!: Bucket;
+  private shredder!: Shredder;
+  private purse!: Purse;
+  private coins!: CoinFlights;
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
-    const { level, startSpot, tractorView, cameraView, joystickView, ballView } = this;
-    if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView) {
-      throw new Error('GameRoot: level, startSpot, tractorView, cameraView, joystickView and ballView must be assigned');
+    const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud } = this;
+    if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud) {
+      throw new Error('GameRoot: level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView and coinHud must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -67,8 +87,7 @@ export class GameRoot extends Component {
     this.moveInput = new MoveInput();
 
     this.tractor = new TractorModel(Config.tractor, Config.tractor.tiers[0], this.obstacles);
-    Vec3.transformQuat(tmpForward, Vec3.UNIT_Z, startSpot.worldRotation);
-    this.tractor.place(startSpot.worldPosition.x, startSpot.worldPosition.z, Math.atan2(tmpForward.x, tmpForward.z));
+    this.tractor.place(startSpot.worldPosition.x, startSpot.worldPosition.z, yawOf(startSpot));
 
     const { radius, maxCount, carpet } = Config.balls;
     const centres = layCarpet(carpet, radius, maxCount, this.obstacles);
@@ -77,6 +96,14 @@ export class GameRoot extends Component {
     const slots = Math.max(...Config.tractor.tiers.map((t) => t.bucketCapacity));
     const pile = { ...Config.bucket, radius, gravity: Config.balls.gravity };
     this.bucket = new Bucket(pile, this.balls, this.tractor, slots, this.events);
+
+    const at = shredderView.node.worldPosition;
+    const pose = { x: at.x, y: at.y, z: at.z, yaw: yawOf(shredderView.node) };
+    this.shredder = new Shredder({ ...Config.shredder, coinsPerBall: Config.economy.coinsPerBall }, pose, this.balls, this.bucket, this.tractor, this.events);
+    this.purse = new Purse(this.events);
+    this.coins = new CoinFlights(Config.coinFx, this.purse);
+    this.events.on('coinsEarned', ({ amount, x, y, z }) => this.coins.launch(amount, x, y, z));
+    this.events.on('purseChanged', ({ total }) => coinHud.show(total));
 
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
@@ -87,6 +114,8 @@ export class GameRoot extends Component {
     tractorView.render(this.tractor);
     cameraView.render(this.camera);
     ballView.bind(this.balls, radius, Config.balls.look, Config.balls.bounds);
+    shredderView.render(this.shredder);
+    coinHud.show(this.purse.total, false);
 
     exposeForQa({
       config: Config,
@@ -97,7 +126,11 @@ export class GameRoot extends Component {
       tractor: this.tractor,
       balls: this.balls,
       bucket: this.bucket,
+      shredder: this.shredder,
+      purse: this.purse,
+      coins: this.coins,
       ballView,
+      coinHud,
       camera: this.camera,
     });
   }
@@ -116,7 +149,10 @@ export class GameRoot extends Component {
       this.bucket.scoop();
       this.balls.step(step, this.tractor);
       this.bucket.carry(step);
+      // In its zone the shredder takes the load as carried this step; it also swallows its throat.
+      this.shredder.step(step);
     }
+    this.coins.update(frame);
   }
 
   protected lateUpdate(dt: number): void {
@@ -126,7 +162,8 @@ export class GameRoot extends Component {
     this.cameraView!.render(this.camera);
     this.joystickView!.render();
     this.ballView!.render(this.balls, this.bucket);
-    // The ball view has redrawn this frame's moved and carried balls.
+    this.shredderView!.render(this.shredder);
+    // The ball view has redrawn this frame's moved (flying, removed) and carried balls.
     this.balls.clearMoved();
     this.bucket.clearMoved();
   }
