@@ -61,6 +61,7 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 - `git commit` before any batch of scene operations; save the scene through MCP afterwards.
 - A new `.ts` file must be compiled by the editor before its component can be added — wait for the asset refresh.
 - After each feature: run the preview in the browser, check the console, drive the tractor with a scripted autopilot (override the joystick output via JS) through the scenario, take screenshots.
+- Milestone check from `file://` (user wish, 28.09: a full batch took 1.5 h): every scenario on the GPU; on SwiftShader (~4 fps) only the milestone's own scenario and those its change touches, `long-run` quick (`ZM_LONG_SHARES=0.1,0.2`). `hud-atlas` and the full `long-run` on SwiftShader only when the HUD or performance changed, and once at the end of a stage.
 
 ## Build
 - `node tools/build.mjs` — web-mobile build inside the open editor (builder `add-task` via MCP) from `build-config/web-mobile.json`: Debug / source maps / MD5 off, Merge All JSON, mangle + inline enums. CLI build only with the editor closed (EPERM otherwise).
