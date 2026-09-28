@@ -28,9 +28,11 @@ const SUPERSAMPLE = 4;
  * in the line, so a centred Label puts the digits in the middle of its box.
  */
 const FONTS = {
-  // The HUD coin counter (and later prices): what CoinHud's Label drew as Arial bold 100, outline 5.
+  // Every changing number: the HUD coin counter (what CoinHud's Label drew as Arial bold 100, outline 5)
+  // and the pay pads' prices, whose bought upgrade pad reads MAX (the example's pad labels are the same
+  // white bold with a black outline).
   'hud-digits': {
-    out: 'assets/fonts/hud-digits', chars: '0123456789', family: 'Arial', bold: true, size: 100, lineHeight: 100,
+    out: 'assets/fonts/hud-digits', chars: '0123456789MAX', family: 'Arial', bold: true, size: 100, lineHeight: 100,
     fill: '#ffffff', outline: { color: '#000000', width: 5 }, columns: 5,
   },
 };

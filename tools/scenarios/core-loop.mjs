@@ -152,7 +152,8 @@ export default async function coreLoop(t) {
   t.log(`first hand-in: ${first ? `${first.count} of ${first.load} at pivot offset (${first.dx}, ${first.dz})` : 'none'}; ` +
     `then ${s2.handed - (first ? first.count : 0)} more scooped in the zone, ${s2.swallowed} by the throat; purse ${s2.purse}, HUD ${s2.shown}; up to ${p2.maxInFlight} balls in the air`);
   t.check(first && first.count === 8 && first.left === 0, 'the whole load of 8 went in one step');
-  t.check(s2.purse === 2 * s2.shredded && s2.shredded === s2.handed + s2.swallowed && s2.purse >= 16, `+2 per ball: ${s2.shredded} balls, purse ${s2.purse} (the load alone: 16)`);
+  t.check(s2.purse + s2.pads === 2 * s2.shredded && s2.shredded === s2.handed + s2.swallowed && s2.purse >= 16,
+    `+2 per ball: ${s2.shredded} balls, purse ${s2.purse} + pads ${s2.pads} (the load alone: 16)`);
   t.check(s2.shown === s2.purse, `the HUD shows the purse (${s2.shown})`);
   await t.shot('hud-after-first-load');
 
@@ -164,7 +165,7 @@ export default async function coreLoop(t) {
   t.log(`shove: the throat took ${s3.swallowed - before.swallowed} balls (${p3.throatOutside} of all throat balls so far with the tractor outside the zone), ` +
     `hand-ins ${p3.handIns.length}, purse ${before.purse} -> ${s3.purse}`);
   t.check(p3.throatOutside >= 1, `balls shoved into the throat by the full bucket were taken before the tractor reached the zone (${p3.throatOutside})`);
-  t.check(s3.purse === 2 * s3.shredded, `every shredded ball paid 2 (${s3.shredded} balls, purse ${s3.purse})`);
+  t.check(s3.purse + s3.pads === 2 * s3.shredded, `every shredded ball paid 2 (${s3.shredded} balls, purse ${s3.purse} + pads ${s3.pads})`);
   await t.shot('after-shove');
 
   // 5. Two more rounds. Round 2 comes back from the north-west: its load flies across the camera's
@@ -174,8 +175,10 @@ export default async function coreLoop(t) {
     if (k === 0) await runWithArcShots(`round ${k + 2}`, legs, (await probe()).handIns.length);
     else await runLegs(t, `round ${k + 2}`, legs);
     const now = await settleCoins(`round ${k + 2}`);
-    t.log(`round ${k + 2}: handed in ${now.handed - was.handed}, throat ${now.swallowed - was.swallowed}, purse ${was.purse} -> ${now.purse}`);
-    t.check(now.handed > was.handed && now.purse > was.purse && now.purse === 2 * now.shredded, `round ${k + 2}: another load sold, 2 per ball`);
+    // Rounds 2 and 3 stop north of the shredder, on the upgrade pad by then: part of the coins go onto it.
+    t.log(`round ${k + 2}: handed in ${now.handed - was.handed}, throat ${now.swallowed - was.swallowed}, purse ${was.purse} -> ${now.purse}, pads ${was.pads} -> ${now.pads}`);
+    t.check(now.handed > was.handed && now.purse + now.pads > was.purse + was.pads && now.purse + now.pads === 2 * now.shredded,
+      `round ${k + 2}: another load sold, 2 per ball`);
   }
   await t.shot('rounds-done');
 

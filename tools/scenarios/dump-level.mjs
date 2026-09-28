@@ -1,5 +1,6 @@
-// Writes the level's collision and key spots from the running game to tools/test/fixtures/level.json,
-// so Node tests and benchmarks run on the real arena. Re-run after changing the level layout.
+// Writes the level's collision, key spots and the pay pads' plates (world XZ, without the clear margin)
+// from the running game to tools/test/fixtures/level.json, so Node tests and benchmarks run on the real
+// arena. Re-run after changing the level layout.
 //
 //   node tools/check-html.mjs http://localhost:7456/ --size 390x844 --scenario dump-level
 
@@ -9,7 +10,7 @@ import { dirname, resolve } from 'node:path';
 const OUT = resolve('tools/test/fixtures/level.json');
 
 export default async function dumpLevel(t) {
-  await t.waitFor('window.__zm && window.__zm.obstacles');
+  await t.waitFor('!!(window.__zm && window.__zm.obstacles && window.__zm.pads)');
   const level = await t.evaluate(`(() => {
     const g = __zm.obstacles, round = (v) => +v.toFixed(4);
     const spot = (path) => { const n = cc.find(path), p = n.worldPosition, e = n.eulerAngles;
@@ -22,10 +23,12 @@ export default async function dumpLevel(t) {
         : { kind: 'circle', x: round(o.x), z: round(o.z), radius: round(o.radius), mask: o.mask }),
       spots: { tractorStart: spot('Level/Spots/TractorStart'), shredder: spot('Level/Shredder'),
                upgradePad: spot('Level/Spots/UpgradePad'), gatePad: spot('Level/Spots/GatePad') },
+      plates: Object.fromEntries(['upgrade', 'gate'].map((id) => { const z = __zm.pads[id].clearZone, m = __zm.config.pads.clearMargin;
+        return [id, { minX: round(z.minX + m), maxX: round(z.maxX - m), minZ: round(z.minZ + m), maxZ: round(z.maxZ - m) }]; })),
     };
   })()`);
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify({ capturedFrom: 'Main.scene via tools/scenarios/dump-level.mjs', ...level }, null, 1) + '\n');
-  t.log(`${level.obstacles.length} obstacles, spots ${Object.keys(level.spots).join(', ')} -> ${OUT}`);
+  t.log(`${level.obstacles.length} obstacles, spots ${Object.keys(level.spots).join(', ')}, plates ${JSON.stringify(level.plates)} -> ${OUT}`);
   t.check(level.obstacles.length > 2, 'level collision dumped');
 }

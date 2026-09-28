@@ -156,9 +156,11 @@ const ROUTE_T2 = [
 ];
 // A short push into untouched carpet for the rolling close-up: from the start spot turn to -X short of
 // the carpet (the start hole ends at x ~6.1 and the bucket reaches 1.9 ahead of the pivot), then push.
+// Along z -10.3 and 1.1 s long: since M8 the gate plate's bare patch reaches z -11 west of x 4.6, and
+// the old 0.9-s push along z -11 met only 4-6 balls (this one moves 12-17 in Node at 60-6 fps).
 const ROLL_PUSH = [
-  { name: 'roll: turn to the carpet', kind: 'goto', x: 8.3, z: -11, radius: 0.3 },
-  { name: 'roll: push', kind: 'push', dx: -1, dz: 0, time: 0.9 },
+  { name: 'roll: turn to the carpet', kind: 'goto', x: 8.3, z: -10.3, radius: 0.3 },
+  { name: 'roll: push', kind: 'push', dx: -1, dz: 0, time: 1.1 },
   { name: 'roll: stop', kind: 'stop', time: 0.3 },
 ];
 
@@ -315,7 +317,7 @@ export default async function balls(t) {
       held: Array.from({ length: b.count }, (_, i) => b.isHeld(i)) }; })()`;
   await runLegs(t, 'roll', ROLL_PUSH.slice(0, 1));
   const before = await t.evaluate(spinSnap);
-  await t.evaluate(freezeCamera(3.6, -11, 10)); // just ahead of where the bucket stops
+  await t.evaluate(freezeCamera(2.9, -10.3, 10)); // just ahead of where the bucket stops
   await t.frames(3);
   await t.shot('roll-before');
   await runLegs(t, 'roll', ROLL_PUSH.slice(1));

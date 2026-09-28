@@ -40,6 +40,8 @@ export class EventBus<TEvents extends object> {
 export interface GameEvents {
   /** A ball went into the bucket. */
   ballScooped: { readonly carried: number; readonly capacity: number };
+  /** The shredder took the bucket's whole load (`count` balls fly in). */
+  loadHandedIn: { readonly count: number };
   /** Balls were fed to the shredder (bucket unload or shoved into its throat). */
   ballsShredded: { readonly count: number };
   /** Coins were earned at a world point; the purse is credited when they arrive. */
@@ -48,6 +50,8 @@ export interface GameEvents {
   purseChanged: { readonly total: number; readonly delta: number };
   /** The tractor reached a new tier (1-based). */
   tierChanged: { readonly tier: number };
+  /** Coins left the purse for a pay pad (they count on the pad when they land). */
+  coinsSpent: { readonly padId: string; readonly amount: number };
   /** A pay pad received its full price. */
   padPaid: { readonly padId: string };
   /** The gate finished opening: the end of the run. */

@@ -145,6 +145,7 @@ export class Shredder {
       this.flights.launch(i, this.aimX + this.scatter(spread), this.aimY, this.aimZ + this.scatter(spread), time * (1 + stagger * this.random()), arc);
     }
     this.handedIn += n;
+    if (n > 0) this.events?.emit('loadHandedIn', { count: n });
   }
 
   /** Free balls inside the throat box go down into the mouth. */

@@ -269,11 +269,30 @@ export const Config = {
     seed: 11,
   },
 
+  /**
+   * Pay pads (numbers from the example): the tractor's pivot in the square zone around a pad streams
+   * coins from the purse onto it. The first coin goes at once, the next ones every `interval` seconds
+   * and faster and faster, so the whole remaining price has left the purse within `fillTime`; each
+   * coin counts on the pad when it lands (Config.coinFx flight). A partial payment is kept.
+   * Where the pads stand comes from the scene (Level/Spots/UpgradePad, GatePad).
+   */
   pads: {
-    /** Half size of the square zone the tractor has to stand in. */
+    /** Half size of the square zone (world axes) the tractor's pivot has to be in. */
     zoneHalf: 3.1,
-    /** The full price streams onto a pad within this time, s. */
     fillTime: 1.55,
+    interval: 0.07,
+    /**
+     * Balls are kept this far off a shown, unpaid pad's plate (beyond its drawn edge), units. The example
+     * keeps 0.3; seen from the camera at 45° a ball that close still covers the plate's near edge.
+     */
+    clearMargin: 0.5,
+    /** A ball on a kept-clear pad rolls off it toward the nearest edge at least this fast, units/s. */
+    clearSpeed: 3,
+    /** A pad popping up in the carpet throws the balls within `radius` outward (speed at its centre, units/s; hop share of it). */
+    burst: { radius: 2.8, speed: 14, hop: 0.2 },
+    /** Seconds a pad takes to pop up (backOut) and to shrink away (backIn). */
+    popTime: 0.35,
+    shrinkTime: 0.25,
   },
 
   /**

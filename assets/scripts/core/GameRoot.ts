@@ -4,11 +4,15 @@ import { EventBus } from './Events';
 import type { GameEvents } from './Events';
 import { exposeForQa } from './QaBridge';
 import { layCarpet } from '../balls/BallCarpet';
+import type { CarpetHole } from '../balls/BallCarpet';
 import { BallField } from '../balls/BallField';
 import { BallRenderer } from '../balls/BallRenderer';
 import { CameraRigModel } from '../camera/CameraRigModel';
 import { CameraRigView } from '../camera/CameraRigView';
 import { CoinFlights } from '../economy/CoinFlights';
+import { PayPad } from '../economy/PayPad';
+import { PayPadView } from '../economy/PayPadView';
+import { Progression } from '../economy/Progression';
 import { Purse } from '../economy/Purse';
 import { Shredder } from '../economy/Shredder';
 import { ShredderView } from '../economy/ShredderView';
@@ -35,8 +39,8 @@ function yawOf(node: Node): number {
 /**
  * Composition root: creates the models, wires them to the scene's views and drives the frame in a
  * fixed order (update: input, then tractor -> scoop -> balls -> carry -> shredder in steps of at most
- * Config.time.maxStep, then the coins in the air; lateUpdate: views and camera). The only place that
- * knows every system (Unity analogy: a bootstrap MonoBehaviour).
+ * Config.time.maxStep, then the coins in the air, then the pay pads; lateUpdate: views and camera).
+ * The only place that knows every system (Unity analogy: a bootstrap MonoBehaviour).
  */
 @ccclass('GameRoot')
 export class GameRoot extends Component {
@@ -64,6 +68,15 @@ export class GameRoot extends Component {
   @property({ type: CoinHud })
   coinHud: CoinHud | null = null;
 
+  @property({ type: PayPadView, tooltip: 'On the upgrade pad spot: the pad stands where that node is.' })
+  upgradePadView: PayPadView | null = null;
+
+  @property({ type: PayPadView, tooltip: 'On the gate pad spot: the pad stands where that node is.' })
+  gatePadView: PayPadView | null = null;
+
+  @property({ type: PayPadView, tooltip: 'The price sign over the gate (shows the gate pad).' })
+  gateSignView: PayPadView | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -74,12 +87,14 @@ export class GameRoot extends Component {
   private shredder!: Shredder;
   private purse!: Purse;
   private coins!: CoinFlights;
+  private progression!: Progression;
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
-    const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud } = this;
-    if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud) {
-      throw new Error('GameRoot: level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView and coinHud must be assigned');
+    const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView } = this;
+    if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
+      || !upgradePadView || !gatePadView || !gateSignView) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -89,8 +104,17 @@ export class GameRoot extends Component {
     this.tractor = new TractorModel(Config.tractor, Config.tractor.tiers[0], this.obstacles);
     this.tractor.place(startSpot.worldPosition.x, startSpot.worldPosition.z, yawOf(startSpot));
 
+    // Pad plates on the ground; the gate's is there from the start, so the carpet leaves it bare (ball
+    // centres up to the edge of its clear zone: a carpet hole keeps them a radius off its own edge).
+    const upgradePlate = upgradePadView.plateRect(Config.pads.clearMargin);
+    const gatePlate = gatePadView.plateRect(Config.pads.clearMargin);
     const { radius, maxCount, carpet } = Config.balls;
-    const centres = layCarpet(carpet, radius, maxCount, this.obstacles);
+    const holes: CarpetHole[] = [...carpet.holes];
+    if (gatePlate) {
+      holes.push({ kind: 'box', x: (gatePlate.minX + gatePlate.maxX) / 2, z: (gatePlate.minZ + gatePlate.maxZ) / 2,
+        halfX: (gatePlate.maxX - gatePlate.minX) / 2 - radius, halfZ: (gatePlate.maxZ - gatePlate.minZ) / 2 - radius });
+    }
+    const centres = layCarpet({ ...carpet, holes }, radius, maxCount, this.obstacles);
     this.balls = new BallField(Config.balls, centres.length / 2, this.obstacles);
     for (let k = 0; k < centres.length; k += 2) this.balls.add(centres[k], radius, centres[k + 1]);
     const slots = Math.max(...Config.tractor.tiers.map((t) => t.bucketCapacity));
@@ -105,6 +129,15 @@ export class GameRoot extends Component {
     this.events.on('coinsEarned', ({ amount, x, y, z }) => this.coins.launch(amount, x, y, z));
     this.events.on('purseChanged', ({ total }) => coinHud.show(total));
 
+    const { upgradePrice, gatePrice } = Config.economy;
+    const upgradePad = new PayPad('upgrade', Config.pads, upgradePadView.node.worldPosition, upgradePrice, this.purse, this.tractor,
+      Config.coinFx, this.events, { shown: false, plate: upgradePlate });
+    const gatePad = new PayPad('gate', Config.pads, gatePadView.node.worldPosition, gatePrice, this.purse, this.tractor,
+      Config.coinFx, this.events, { shown: true, plate: gatePlate });
+    this.balls.addClearZone(upgradePad.clearZone);
+    this.balls.addClearZone(gatePad.clearZone);
+    this.progression = new Progression(Config.pads, upgradePad, gatePad, this.balls, this.events);
+
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
     this.events.on('tierChanged', ({ tier }) =>
@@ -116,6 +149,7 @@ export class GameRoot extends Component {
     ballView.bind(this.balls, radius, Config.balls.look, Config.balls.bounds);
     shredderView.render(this.shredder);
     coinHud.show(this.purse.total, false);
+    this.renderPads();
 
     exposeForQa({
       config: Config,
@@ -129,6 +163,8 @@ export class GameRoot extends Component {
       shredder: this.shredder,
       purse: this.purse,
       coins: this.coins,
+      progression: this.progression,
+      pads: { upgrade: upgradePad, gate: gatePad },
       ballView,
       coinHud,
       camera: this.camera,
@@ -153,6 +189,8 @@ export class GameRoot extends Component {
       this.shredder.step(step);
     }
     this.coins.update(frame);
+    // Pads take from the purse after this frame's coins have arrived in it.
+    this.progression.step(frame);
   }
 
   protected lateUpdate(dt: number): void {
@@ -163,8 +201,16 @@ export class GameRoot extends Component {
     this.joystickView!.render();
     this.ballView!.render(this.balls, this.bucket);
     this.shredderView!.render(this.shredder);
+    this.renderPads();
     // The ball view has redrawn this frame's moved (flying, removed) and carried balls.
     this.balls.clearMoved();
     this.bucket.clearMoved();
+  }
+
+  private renderPads(): void {
+    const { upgradePad, gatePad } = this.progression;
+    this.upgradePadView!.render(upgradePad);
+    this.gatePadView!.render(gatePad);
+    this.gateSignView!.render(gatePad);
   }
 }
