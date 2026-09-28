@@ -1,7 +1,8 @@
 // Ball check (M3 simulation + M4 rendering). The carpet is laid and sleeps untouched; the tractor
-// ploughs through it by autopilot (tier 1, then the tier 2 boxes and speed); no ball ever ends a frame
-// inside a rock or outside the field; the carpet falls asleep again once the tractor stops; the time
-// of the ball step is measured per frame in the browser.
+// ploughs through it by autopilot (tier 1, then the tier 2 boxes and speed); no free ball ever ends a
+// frame inside a rock or outside the field (the balls the bucket scoops are audited by the scoop
+// scenario; here they are only counted); the carpet falls asleep again once the tractor stops; the
+// time of the ball step is measured per frame in the browser.
 // Rendering: the balls are one render model with one pass (exactly +1 draw call); after every frame
 // the vertex data shows every ball where the field has it (only moved balls are rewritten, so a missed
 // one would show); an asleep carpet uploads nothing; balls that rolled turned and the others did not;
