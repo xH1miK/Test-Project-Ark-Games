@@ -294,6 +294,9 @@ export default async function balls(t) {
   };
 
   // 1. The carpet as laid; the render model; the joystick over the balls; FPS.
+  const gl = await t.evaluate(`(() => { const c = cc.game.canvas, gl2 = c.getContext('webgl2');
+    return gl2 ? 'WebGL 2 (gl_FragDepth)' : 'WebGL 1, EXT_frag_depth ' + (c.getContext('webgl').getExtension('EXT_frag_depth') ? 'on' : 'missing (balls get quad depth)'); })()`);
+  t.log(`context: ${gl}`);
   const laid = await audit();
   t.log(`carpet: ${laid.count} balls, ${laid.simulated} simulated, highest y ${laid.highest.toFixed(3)}`);
   t.check(laid.count > 1400 && laid.count <= 1600, `carpet laid (${laid.count} balls)`);
