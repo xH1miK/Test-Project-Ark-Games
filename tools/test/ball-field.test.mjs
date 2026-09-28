@@ -4,7 +4,7 @@ import { Config, PusherFace } from '../../assets/scripts/core/Config.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
 import { layCarpet, mulberry32 } from '../../assets/scripts/balls/BallCarpet.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
-import { CARPET_ROUTE, LEVEL, arenaGrid, autopilot, frame, makeWorld, measure } from './ball-world.mjs';
+import { BALLS_SCENARIO_ROUTE, CARPET_ROUTE, LEVEL, arenaGrid, autopilot, driveLegs, frame, makeWorld, measure } from './ball-world.mjs';
 
 const R = Config.balls.radius;
 const D = 2 * R;
@@ -250,7 +250,9 @@ test('walls hold in a sharp pocket between two rotated walls (balls rammed into 
     balls.step(1 / 30, pusherAt(Math.sin(k / 9) * 0.4, -1 + Math.min(6, k * 0.06), 0, narrow));
     for (let i = 0; i < balls.count; i++) worst = Math.max(worst, grid.resolveCircle(balls.x[i], balls.z[i], R, Blocks.Balls, tmp));
   }
-  assert.ok(worst < 1e-9, `deepest ball in a wall ${worst}`);
+  // In the apex every push-out pass halves what is left, so a sub-micron tail may stay (7e-7 seen on
+  // 28.09 once the trajectories changed); the browser audit also counts a ball as in a rock from 1e-6.
+  assert.ok(worst < 1e-6, `deepest ball in a wall ${worst}`);
 });
 
 test('field edges hold, including the kerb corner', () => {
@@ -346,6 +348,23 @@ test('T2 along the walls at a jittery low frame rate rams balls into the corners
   }
   assert.equal(inRock, 0, 'ball-frames inside a rock');
   assert.equal(outside, 0, 'balls outside the arena');
+});
+
+test('a berm left by a drive at 6 fps (1/30 s steps) falls asleep: contact noise is not motion', () => {
+  // Found on 28.09 by the balls scenario in SwiftShader (6 fps): three balls wedged on three others each
+  // wobbled by ~0.01 a step for ever, because the gravity sink of a 1/30 s step outgrew the fixed
+  // stillness share. The same route and frame time.
+  const world = makeWorld();
+  driveLegs(world, BALLS_SCENARIO_ROUTE, () => 1 / 6);
+  let asleepAfter = -1;
+  for (let f = 1; f <= 18 && asleepAfter < 0; f++) {
+    frame(world, 1 / 6, 0, 0);
+    world.balls.clearMoved();
+    if (world.balls.simulatedCount === 0) asleepAfter = f / 6;
+  }
+  assert.ok(asleepAfter >= 0, `the berms fall asleep within 3 s of the stop (${world.balls.simulatedCount} balls still simulated)`);
+  const rest = measure(world);
+  assert.ok(rest.overlap < 0.05, `overlap at rest ${rest.overlap}`);
 });
 
 test('tier boxes: body front and bucket back are the shared (shut) faces', () => {

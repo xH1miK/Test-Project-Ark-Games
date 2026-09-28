@@ -623,7 +623,11 @@ export class BallField {
     const s = this.settings;
     const inv = 1 / dt;
     const rest2 = s.restSpeed * s.restSpeed;
-    const still = STILL_SHARE * 2 * this.radius;
+    // A supported ball that moved less than this in a step is at rest; its move was contact noise:
+    // gravity sinks a resting ball about g·dt² into its supports every step and the contact passes
+    // push it only nearly back. With 1/30 s steps that noise outgrew the fixed share and a ball
+    // wedged on three others wobbled for ever instead of falling asleep (found at 6 fps, 28.09).
+    const still = Math.max(STILL_SHARE * 2 * this.radius, s.gravity * dt * dt);
     const still2 = still * still;
     const throwCap = this.pusherSpeed + s.pushSpeed + 1;
     for (let a = 0; a < this.activeCount; a++) {
@@ -631,12 +635,16 @@ export class BallField {
       const ddx = x[i] - sx[i];
       const ddy = y[i] - sy[i];
       const ddz = z[i] - sz[i];
-      let nvx = ddx * inv + kx[i];
-      let nvy = ddy * inv;
-      let nvz = ddz * inv + kz[i];
+      const moved2 = ddx * ddx + ddy * ddy + ddz * ddz;
+      const f = flags[i];
+      const supported = (f & SUPPORTED) !== 0;
+      // Contact noise gives a supported ball no speed; a knock from a neighbour still does.
+      const noise = supported && moved2 <= still2 ? 0 : inv;
+      let nvx = ddx * noise + kx[i];
+      let nvy = ddy * noise;
+      let nvz = ddz * noise + kz[i];
       kx[i] = 0;
       kz[i] = 0;
-      const f = flags[i];
       if (f & ON_FLOOR) {
         // Landing: a hard fall bounces a little, anything else stays on the floor.
         nvy = vy[i] < -2 && s.restitution > 0 ? -vy[i] * s.restitution : 0;
@@ -653,7 +661,6 @@ export class BallField {
         nvx *= k;
         nvz *= k;
       }
-      const supported = (f & SUPPORTED) !== 0;
       if (supported && h2 + nvy * nvy < rest2) {
         nvx = 0;
         nvy = 0;
@@ -662,7 +669,6 @@ export class BallField {
       vx[i] = nvx;
       vy[i] = nvy;
       vz[i] = nvz;
-      const moved2 = ddx * ddx + ddy * ddy + ddz * ddz;
       if (moved2 > 0) this.markMoved(i);
       if (!supported || moved2 > still2 || nvx !== 0 || nvy !== 0 || nvz !== 0) this.heatAround(cellOf[i]);
     }
