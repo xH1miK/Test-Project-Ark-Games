@@ -159,3 +159,55 @@ export function measure(world) {
 
 /** Ball-ball overlap that counts as deep (visible interpenetration), units. */
 export const DEEP = 0.1;
+
+/**
+ * Drives legs in the format of the browser scenarios' autopilot (tools/scenarios/lib/autopilot.mjs),
+ * with its rules: { kind: 'goto', x, z, radius? } | { kind: 'push', dx, dz, time } |
+ * { kind: 'stop', time } (ends once the tractor stands still), plus { kind: 'tier', index }.
+ * `nextDt()` gives each frame's time.
+ */
+export function driveLegs(world, legs, nextDt) {
+  const { tractor, balls } = world;
+  for (const leg of legs) {
+    if (leg.kind === 'tier') {
+      tractor.setTier(Config.tractor.tiers[leg.index]);
+      continue;
+    }
+    const fromX = tractor.x;
+    const fromZ = tractor.z;
+    let x = 0;
+    let z = 0;
+    for (let t = 0; ; ) {
+      if (leg.kind === 'goto') {
+        const dx = leg.x - tractor.x;
+        const dz = leg.z - tractor.z;
+        const d = Math.hypot(dx, dz);
+        if (d <= (leg.radius || 1) || dx * (leg.x - fromX) + dz * (leg.z - fromZ) <= 0) break;
+        x = dx / d;
+        z = dz / d;
+      } else if (leg.kind === 'push') {
+        if (t >= leg.time) break;
+        x = leg.dx;
+        z = leg.dz;
+      } else {
+        x = 0;
+        z = 0;
+        if (t >= leg.time && tractor.speed === 0) break;
+      }
+      const dt = nextDt();
+      frame(world, dt, x, z);
+      balls.clearMoved();
+      t += dt;
+    }
+  }
+}
+
+/** The route of the browser `balls` scenario on 28.09: a short push into the carpet, T1 through it, then T2. */
+export const BALLS_SCENARIO_ROUTE = [
+  { kind: 'goto', x: 8.3, z: -11, radius: 0.3 }, { kind: 'push', dx: -1, dz: 0, time: 0.9 }, { kind: 'stop', time: 0.3 },
+  { kind: 'goto', x: 12, z: -5 }, { kind: 'goto', x: 11, z: 5 }, { kind: 'goto', x: 1, z: 8 }, { kind: 'goto', x: -2, z: 0 },
+  { kind: 'goto', x: 5, z: 3.5 }, { kind: 'stop', time: 0.5 },
+  { kind: 'tier', index: 1 },
+  { kind: 'goto', x: 10, z: 12 }, { kind: 'goto', x: -1, z: 13 }, { kind: 'goto', x: -2, z: -6 }, { kind: 'goto', x: 10, z: -5 },
+  { kind: 'stop', time: 0.5 },
+];

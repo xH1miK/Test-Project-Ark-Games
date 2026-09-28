@@ -33,12 +33,15 @@
       },
       {
         "__id__": 349
+      },
+      {
+        "__id__": 382
       }
     ],
     "_active": true,
     "_components": [],
     "_prefab": {
-      "__id__": 381
+      "__id__": 383
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -69,7 +72,7 @@
     },
     "autoReleaseAssets": false,
     "_globals": {
-      "__id__": 382
+      "__id__": 384
     },
     "_id": "b1579e2a-b71a-410a-b37e-963a7b4c2c7e"
   },
@@ -12243,6 +12246,9 @@
     "joystickView": {
       "__id__": 360
     },
+    "ballView": {
+      "__id__": 381
+    },
     "_id": "b07QoWl5RADJsJXLkNhV0X"
   },
   {
@@ -13140,6 +13146,67 @@
     "_id": "53c3gU8CxKLLDfZVj/P5Dp"
   },
   {
+    "__type__": "95214isw2ZHtof+SPaFIhF+",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 382
+    },
+    "_enabled": true,
+    "__prefab": null,
+    "material": {
+      "__uuid__": "72b1691e-449f-4023-b399-461399c48f91",
+      "__expectedType__": "cc.Material"
+    },
+    "_id": "d3QXY9U65CK43odzy6B1vy"
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "Balls",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "_parent": {
+      "__id__": 1
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 381
+      }
+    ],
+    "_prefab": null,
+    "_lpos": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_lrot": {
+      "__type__": "cc.Quat",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "w": 1
+    },
+    "_lscale": {
+      "__type__": "cc.Vec3",
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "_mobility": 0,
+    "_layer": 1073741824,
+    "_euler": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_id": "5a7vcIzulFm6m0mL5eBY7d"
+  },
+  {
     "__type__": "cc.PrefabInfo",
     "root": null,
     "asset": null,
@@ -13158,28 +13225,28 @@
   {
     "__type__": "cc.SceneGlobals",
     "ambient": {
-      "__id__": 383
-    },
-    "shadows": {
-      "__id__": 384
-    },
-    "_skybox": {
       "__id__": 385
     },
-    "fog": {
+    "shadows": {
       "__id__": 386
     },
-    "octree": {
+    "_skybox": {
       "__id__": 387
     },
-    "skin": {
+    "fog": {
       "__id__": 388
     },
-    "lightProbeInfo": {
+    "octree": {
       "__id__": 389
     },
-    "postSettings": {
+    "skin": {
       "__id__": 390
+    },
+    "lightProbeInfo": {
+      "__id__": 391
+    },
+    "postSettings": {
+      "__id__": 392
     },
     "bakedWithStationaryMainLight": false,
     "bakedWithHighpLightmap": false

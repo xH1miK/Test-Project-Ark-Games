@@ -166,6 +166,12 @@ export const Config = {
     /** Steps a disturbed cell stays awake; balls in cold cells sleep and cost nothing. */
     hotFrames: 4,
 
+    /**
+     * Drawing only (BallRenderer): each ball is drawn 1 ± sizeJitter of the radius and 1 ± shadeJitter
+     * bright, seeded. Colour, gloss and pattern live in the material (assets/Materials/Balls.mtl).
+     */
+    look: { sizeJitter: 0.05, shadeJitter: 0.04, seed: 7 },
+
     /** The carpet laid at start (world XZ, from the example; the holes sit on our spots). */
     carpet: {
       centerX: 4.84,
