@@ -103,11 +103,12 @@ const BACK_ONTO_UPGRADE = [
   { name: 'back: stand', kind: 'stop', time: 3 },
 ];
 // West, then south along x 0.5 (west of the shredder's zone) to the gate pad (1.3, -12.2), stop on it,
-// then off it east.
+// then off it east. By then the tractor is tier 2 (the upgrade was bought): its body stops against the
+// gate with the pivot at z -11.1, still well inside the pad's zone.
 const ONTO_GATE = [
   { name: 'gate pad: west', kind: 'goto', x: 0.5, z: 2.6, radius: 0.8 },
   { name: 'gate pad: south', kind: 'goto', x: 0.5, z: -9, radius: 0.8 },
-  { name: 'gate pad: onto it', kind: 'goto', x: 1.3, z: -11.6, radius: 0.4 },
+  { name: 'gate pad: onto it', kind: 'goto', x: 1.3, z: -11, radius: 0.4 },
   { name: 'gate pad: stand', kind: 'stop', time: 2.5 },
   { name: 'gate pad: off east', kind: 'goto', x: 7.5, z: -11, radius: 0.6 },
   { name: 'gate pad: stop', kind: 'stop', time: 1 },

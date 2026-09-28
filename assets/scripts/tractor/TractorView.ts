@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, tween, Vec3 } from 'cc';
+import { _decorator, Component, Node, Tween, tween, Vec3 } from 'cc';
 import { Config } from '../core/Config';
 import type { TractorModel } from './TractorModel';
 
@@ -36,7 +36,7 @@ export class TractorView extends Component {
     const arriving = this.shown !== 0;
     for (let i = 0; i < this.models.length; i++) {
       const m = this.models[i];
-      tween(m).stop();
+      Tween.stopAllByTarget(m); // tween(m).stop() would stop only a new, empty tween
       m.setScale(rest[i]);
       m.active = i === tier - 1;
     }

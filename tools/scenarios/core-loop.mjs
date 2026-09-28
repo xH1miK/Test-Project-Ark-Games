@@ -69,17 +69,19 @@ const SHOVE = [
   { name: 'shove: stop', kind: 'stop', time: 0.3 },
 ];
 // Two more rounds from the shredder's east side: out north past it, fill in the carpet north-west,
-// back into the zone north-west of the shredder's body; then once more through the north.
+// back into the zone north-west of the shredder's body; then once more through the north. Round 2's
+// fill-up crosses the upgrade pad (M9): with its price in the purse the tractor buys tier 2 on the way,
+// so the legs into the zone end as the body enters it (tier 2's bigger body stops further out).
 const ROUNDS = [
   [
     { name: 'round 2: out north', kind: 'goto', x: 9, z: 3 },
     { name: 'round 2: fill north-west', kind: 'goto', x: 0, z: 4 },
-    { name: 'round 2: to the shredder', kind: 'goto', x: 2.6, z: 1, radius: 0.5 },
+    { name: 'round 2: to the shredder', kind: 'goto', x: 2.6, z: 1, radius: 0.5, until: 'inZone' },
     { name: 'round 2: stop', kind: 'stop', time: 0.3 },
   ],
   [
     { name: 'round 3: fill north', kind: 'goto', x: 1, z: 7 },
-    { name: 'round 3: to the shredder', kind: 'goto', x: 3.5, z: 1.2, radius: 0.5 },
+    { name: 'round 3: to the shredder', kind: 'goto', x: 3.5, z: 1.2, radius: 0.5, until: 'inZone' },
     { name: 'round 3: stop', kind: 'stop', time: 0.3 },
   ],
 ];

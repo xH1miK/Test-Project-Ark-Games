@@ -1,4 +1,4 @@
-import { _decorator, Component, Label, Node, tween, UITransform, Vec3 } from 'cc';
+import { _decorator, Component, Label, Node, Tween, tween, UITransform, Vec3 } from 'cc';
 import { Config } from '../core/Config';
 import type { GroundRect, PayPad } from './PayPad';
 
@@ -74,7 +74,7 @@ export class PayPadView extends Component {
     if (!visual || shown === this.shown) return;
     const first = this.shown === null;
     this.shown = shown;
-    tween(visual).stop();
+    Tween.stopAllByTarget(visual); // tween(visual).stop() would stop only a new, empty tween
     if (first) {
       // The state the run starts in: no animation.
       visual.active = shown;
