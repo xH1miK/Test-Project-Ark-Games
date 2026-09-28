@@ -158,7 +158,11 @@ export default async function longRun(t) {
       const [fill, sell] = await driveLegs(t, roundLegs(round, phase.tier, shredder), 150000);
       const now = await loopState(t);
       sold.push(sell.sold);
-      const ok = fill.ok && fill.reason === 'full' && fill.load === capacity && sell.ok && sell.reason === 'inZone' && sell.sold === capacity;
+      // The load goes whole in the step the pivot enters the zone (the probe checks every step), and the
+      // bucket cannot lose balls on the way: a full bucket at the end of the fill-up is a full hand-in. The
+      // sell leg ends with the frame, so at low FPS it also counts what the bucket scooped in the zone in
+      // that frame's later steps (sold in turn, as in the example): sold >= the load.
+      const ok = fill.ok && fill.reason === 'full' && fill.load === capacity && sell.ok && sell.reason === 'inZone' && sell.sold >= capacity;
       if (!ok) failed.push(round);
       t.log(`${phase.name} round ${String(round).padStart(2)}: ${fill.name} -> ${fill.reason} in ${fill.t}s (${fill.picks} picks), ${fill.load} in the bucket; ` +
         `sold ${sell.sold} after ${sell.t}s at (${sell.x}, ${sell.z}); shredded ${now.shredded} (${Math.round((100 * now.shredded) / total)}%), purse ${now.purse}${ok ? '' : '  <-- not a full load sold whole'}`);
@@ -191,7 +195,7 @@ export default async function longRun(t) {
   // Verdict.
   for (const phase of phases) {
     const s = summaries[phase.name];
-    t.log(`${phase.name}: ${s.rounds} rounds, loads sold ${s.sold.join(' ')}; ${s.frames} frames, fps ${s.fpsMean.toFixed(1)} mean / ${s.fpsMin.toFixed(1)} worst 2-s window; ` +
+    t.log(`${phase.name}: ${s.rounds} rounds, sold as the pivot entered the zone ${s.sold.join(' ')}; ${s.frames} frames, fps ${s.fpsMean.toFixed(1)} mean / ${s.fpsMin.toFixed(1)} worst 2-s window; ` +
       `ball step ${s.stepMean.toFixed(3)} ms mean, ${s.stepP95.toFixed(2)} p95, ${s.stepMax.toFixed(2)} max over ${s.steps} steps (per frame ${s.frameMean.toFixed(3)} / ${s.frameP95.toFixed(2)} / ${s.frameMax.toFixed(2)}); ` +
       `simulated ${s.simMean.toFixed(0)} mean, ${s.simMax} max; draw calls ${s.drawMin}..${s.drawMax} (mostly ${s.drawMode}, mean ${s.drawMean.toFixed(1)}); ` +
       `ball buffer uploaded in ${s.uploads} of ${s.frames} frames (at most ${s.uploadMax} a frame)`);
@@ -199,7 +203,7 @@ export default async function longRun(t) {
     t.check(s.stepP95 < STEP_BUDGET_MS, `${phase.name}: ball step p95 under ${STEP_BUDGET_MS} ms (${s.stepP95.toFixed(2)} ms)`);
     t.check(s.uploadMax <= 1, `${phase.name}: the ball buffer is uploaded at most once a frame`);
   }
-  t.check(failed.length === 0, `every round filled the bucket and sold the whole load as it entered the zone${failed.length ? ` (not: rounds ${failed.join(', ')})` : ''}`);
+  t.check(failed.length === 0, `every round filled the bucket and sold the full load as it entered the zone${failed.length ? ` (not: rounds ${failed.join(', ')})` : ''}`);
   const last = phases[phases.length - 1];
   t.log(`end: shredded ${end.shredded} of ${total} (${Math.round((100 * end.shredded) / total)}%; handed in ${end.handed}, throat ${end.swallowed}), purse ${end.purse}; ` +
     `at rest: ${idleUploads} uploads in 30 frames, ${drawsAtRest} draw calls, fps ${fpsOn.toFixed(1)} with the balls / ${fpsOff.toFixed(1)} without`);

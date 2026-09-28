@@ -95,8 +95,9 @@ export default async function hudAtlas(t) {
     t.log(`system font, ${name}, ${CHANGES} changes: ${describe(await t.evaluate(CHURN))}`);
   }
 
-  // Back to the scene's setup.
-  await t.evaluate('(() => { const h = __hudAtlas; h.label.cacheMode = h.mode; h.label.font = h.font; __zm.coinHud.show(__zm.purse.total, false); })()');
+  // Back to the scene's setup; a shot of a four-digit number (the packed HTML shows the HUD in full).
+  await t.evaluate('(() => { const h = __hudAtlas; h.label.cacheMode = h.mode; h.label.font = h.font; __zm.coinHud.show(1234, false); })()');
   t.check((await draws()) === scene, 'the scene\'s number is back');
   await t.shot('hud');
+  await t.evaluate('__zm.coinHud.show(__zm.purse.total, false)');
 }
