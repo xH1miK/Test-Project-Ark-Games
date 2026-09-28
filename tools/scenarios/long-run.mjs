@@ -155,7 +155,9 @@ export default async function longRun(t) {
   const failed = [];
   const summaries = {};
   for (const [index, phase] of phases.entries()) {
-    if ((await t.evaluate('__zm.tractor.tier')) < phase.tier + 1) {
+    const tierNow = await t.evaluate('__zm.tractor.tier');
+    if (index > 0 && !upgrade && tierNow >= phase.tier + 1) upgrade = { round, onTheWay: true, legs: [] };
+    if (tierNow < phase.tier + 1) {
       const from = await t.evaluate('({ x: __zm.tractor.x, z: __zm.tractor.z })');
       const pad = await t.evaluate('({ x: __zm.pads.upgrade.x, z: __zm.pads.upgrade.z })');
       const legs = await driveLegs(t, upgradeLegs(from, shredder, pad), 60000);
