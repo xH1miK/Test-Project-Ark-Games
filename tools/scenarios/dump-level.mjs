@@ -13,7 +13,7 @@ export default async function dumpLevel(t) {
   const level = await t.evaluate(`(() => {
     const g = __zm.obstacles, round = (v) => +v.toFixed(4);
     const spot = (path) => { const n = cc.find(path), p = n.worldPosition, e = n.eulerAngles;
-      return { x: round(p.x), z: round(p.z), yaw: round(e.y) }; };
+      return { x: round(p.x), y: round(p.y), z: round(p.z), yaw: round(e.y) }; };
     return {
       bounds: g.bounds, cellSize: g.cellSize,
       // ObstacleGrid internals: angle in radians, Cocos Y-rotation convention (see ObstacleGrid.ts).

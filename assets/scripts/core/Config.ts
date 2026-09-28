@@ -248,9 +248,25 @@ export const Config = {
     gatePrice: 300,
   },
 
+  /** The shredder (numbers from the example); where it stands comes from the scene (Level/Shredder). */
   shredder: {
-    /** Half size of the square hand-in zone around the shredder pivot. */
+    /** Half size of the square hand-in zone (world axes) the tractor's pivot has to be in. */
     zoneHalf: 3.5,
+    /**
+     * The load flies in arcs into the shredder: lerp plus a hop of `arc` units at the middle, each
+     * ball `time` × (1 .. 1 + stagger) seconds, aimed `aimHeight` above the pivot and scattered up to
+     * ±spread in world X and Z (a whole load aimed at one point would read as a single ball).
+     */
+    handIn: { time: 0.32, stagger: 0.4, arc: 1.4, aimHeight: 0.5, spread: 0.6 },
+    /**
+     * The throat: free balls shoved into this box (the shredder's own axes, from `depth` below to
+     * `height` above its pivot) go down into its mouth (`mouthHeight` above the pivot, scattered
+     * ±spread) in `time` seconds with a small hop, and pay as well.
+     */
+    throat: { halfX: 1.8, halfZ: 1.95, height: 1.1, depth: 2, mouthHeight: -0.15, spread: 0.55, time: 0.16, arc: 0.25 },
+    /** Rollers: full speed (degrees/s), seconds to spin up and down, how long a feed keeps them turning. */
+    rollers: { speed: 900, spinUp: 0.18, spinDown: 0.6, coast: 0.5 },
+    seed: 11,
   },
 
   pads: {
@@ -260,15 +276,24 @@ export const Config = {
     fillTime: 1.55,
   },
 
+  /**
+   * Coins on their way to the purse (the purse is credited when a coin arrives): a payout flies as up
+   * to `spritesPerPayout` coins sharing its amount, each `flightTime` ± jitter seconds; with
+   * `maxAlive` coins already in the air a payout is credited at once.
+   */
   coinFx: {
     flightTime: 0.45,
+    jitter: 0.18,
     spritesPerPayout: 6,
     maxAlive: 20,
+    seed: 5,
   },
 
   ui: {
     /** Portrait design frame; the UI scales to fit any aspect ratio. */
     designWidth: 1280,
     designHeight: 2276,
+    /** The coin counter swells to `punchScale` and back over `punchTime` seconds when coins arrive. */
+    coinHud: { punchScale: 1.16, punchTime: 0.14 },
   },
 } as const;

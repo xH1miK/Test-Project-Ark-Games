@@ -5,6 +5,14 @@
 export const freezeCamera = (x, z, fov = 45) => `(() => { const c = __zm.camera; c.update = () => {}; c.snap(${x}, 0, ${z});
   cc.find('Main Camera').getComponent(cc.js.getClassByName('cc.Camera')).fov = ${fov}; })()`;
 
+/**
+ * Parks the camera over a ground point with a field of view and puts the camera node there at once,
+ * so it works while the game is paused too (cc.director.pause(): rendering goes on, lateUpdate does not).
+ */
+export const parkCamera = (x, z, fov) => `(() => { const c = __zm.camera; c.update = () => {}; c.snap(${x}, 0, ${z});
+  const node = cc.find('Main Camera'); node.setPosition(c.position.x, c.position.y, c.position.z);
+  node.getComponent(cc.js.getClassByName('cc.Camera')).fov = ${fov}; })()`;
+
 /** The rig follows the tractor again, at the normal field of view. */
 export const RELEASE_CAMERA = `(() => { const c = __zm.camera, tr = __zm.tractor; delete c.update; c.snap(tr.x, 0, tr.z);
   cc.find('Main Camera').getComponent(cc.js.getClassByName('cc.Camera')).fov = 45; })()`;

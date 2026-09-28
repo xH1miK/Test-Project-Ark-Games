@@ -9,7 +9,8 @@
  * - static (written once): quad corner (0/1, 0/1) and a shade as normalised bytes.
  * Indices (two triangles per ball) never change.
  * Two write paths into the dynamic stream: writeMoved for the balls the field moved (they roll along
- * their way on the ground) and writeCarried for the balls a carrier holds (they turn with it).
+ * their way on the ground or in flight; a removed ball is written with radius 0, which hides it) and
+ * writeCarried for the balls a carrier holds (they turn with it).
  */
 
 import { mulberry32 } from './BallCarpet';
@@ -23,6 +24,8 @@ export interface BallSource {
   /** Balls moved since the last redraw, in moved[0 .. movedCount). */
   readonly moved: ArrayLike<number>;
   readonly movedCount: number;
+  /** 1 for a ball that is gone for good: it is not drawn. */
+  readonly removed: ArrayLike<number>;
 }
 
 /**
@@ -131,14 +134,14 @@ export class BallQuads {
     }
   }
 
-  /** Writes every ball of `src` (and hides the unused slots). Call once before the first upload. */
+  /** Writes every ball of `src` (and hides the unused slots and removed balls). Call once before the first upload. */
   writeAll(src: BallSource): void {
     this.carried.fill(0);
     for (let i = 0; i < this.capacity; i++) {
       if (i < src.count) {
         this.lastX[i] = src.x[i];
         this.lastZ[i] = src.z[i];
-        this.write(i, src.x[i], src.y[i], src.z[i], this.radius[i]);
+        this.write(i, src.x[i], src.y[i], src.z[i], src.removed[i] ? 0 : this.radius[i]);
       } else {
         this.write(i, 0, 0, 0, 0);
       }
@@ -147,7 +150,8 @@ export class BallQuads {
 
   /**
    * Rolls and rewrites the balls in src.moved; returns how many were rewritten (0: nothing to upload).
-   * A ball turns about up × its way on the ground by (way / radius), so its pattern rolls along.
+   * A ball turns about up × its way on the ground by (way / radius), so its pattern rolls along; a
+   * removed ball is hidden (radius 0).
    */
   writeMoved(src: BallSource): number {
     const { moved, movedCount } = src;
@@ -155,6 +159,11 @@ export class BallQuads {
       const i = moved[k];
       const x = src.x[i];
       const z = src.z[i];
+      if (src.removed[i]) {
+        this.carried[i] = 0;
+        this.write(i, x, src.y[i], z, 0);
+        continue;
+      }
       if (this.carried[i]) {
         // Back in the field: it rolls on from where it is.
         this.carried[i] = 0;
