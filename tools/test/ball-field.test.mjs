@@ -343,7 +343,8 @@ test('T2 along the walls at a jittery low frame rate rams balls into the corners
   for (let f = 0, stick = steer(world.tractor); stick && f < 1500; f++, stick = steer(world.tractor)) {
     frame(world, Math.min(0.25, 1 / 60 + random() * random() * 0.3), stick.x, stick.z);
     const { balls, grid } = world;
-    for (let i = 0; i < balls.count; i++) if (grid.resolveCircle(balls.x[i], balls.z[i], R, Blocks.Balls, tmp) > 1e-9) inRock++;
+    // Carried balls ride in the bucket (its corners may reach over a rock); the field's balls must not.
+    for (let i = 0; i < balls.count; i++) if (!balls.isHeld(i) && grid.resolveCircle(balls.x[i], balls.z[i], R, Blocks.Balls, tmp) > 1e-9) inRock++;
     outside = Math.max(outside, measure(world).outside);
   }
   assert.equal(inRock, 0, 'ball-frames inside a rock');
@@ -367,11 +368,81 @@ test('a berm left by a drive at 6 fps (1/30 s steps) falls asleep: contact noise
   assert.ok(rest.overlap < 0.05, `overlap at rest ${rest.overlap}`);
 });
 
+// --- held balls ---
+
+test('findFree lists the free balls with centres in a rectangle, never a held one', () => {
+  const { balls } = openField();
+  const ids = [];
+  for (let k = 0; k < 6; k++) ids.push(balls.add(k * D, R, 0)); // x 0..2.75 at z 0
+  const out = new Int32Array(16);
+  const found = (minX, maxX) => Array.from(out.subarray(0, balls.findFree(minX, maxX, -0.1, 0.1, out))).sort((a, b) => a - b);
+  assert.deepEqual(found(0.5, 2.3), [ids[1], ids[2], ids[3], ids[4]]);
+  balls.hold(ids[2]);
+  assert.deepEqual(found(0.5, 2.3), [ids[1], ids[3], ids[4]]);
+  assert.equal(balls.findFree(-1, 5, -1, 1, new Int32Array(2)), 2, 'stops at the size of out');
+});
+
+test('a held ball leaves the field: not simulated, nobody bumps into it, its neighbours wake', () => {
+  const { balls } = openField();
+  const a = balls.add(0, R, 0);
+  const b = balls.add(D, R, 0);
+  const top = balls.add(R, R + D * 0.87, 0); // resting on a and b
+  steps(balls, 30);
+  assert.equal(balls.simulatedCount, 0, 'a settled pyramid sleeps');
+  balls.hold(a);
+  assert.ok(balls.isHeld(a) && balls.heldCount === 1);
+  balls.step(1 / 60, null);
+  assert.ok(balls.isAwake(b) && balls.isAwake(top) && !balls.isAwake(a), 'the neighbours are simulated, the held ball is not');
+  // A ball dropped where the held one lies is not pushed by it.
+  const c = balls.add(-0.05, R, 0);
+  balls.wake(0, 0, 1);
+  steps(balls, 30);
+  assert.ok(Math.abs(balls.x[c] + 0.05) < 1e-9 && Math.abs(balls.z[c]) < 1e-9, `c at (${balls.x[c]}, ${balls.z[c]})`);
+  // A pusher driven right through the held ball's place leaves it alone.
+  balls.place(a, 5, 0.5, 5);
+  const heldAt = [balls.x[a], balls.y[a], balls.z[a]];
+  for (let k = 0; k <= 60; k++) balls.step(1 / 60, pusherAt(5, 3 + k / 20, 0));
+  assert.deepEqual([balls.x[a], balls.y[a], balls.z[a]], heldAt);
+  assert.ok(!balls.isAwake(a));
+  // place() does not move a free ball.
+  balls.place(b, 9, 9, 9);
+  assert.notEqual(balls.x[b], 9);
+});
+
+test('a released ball rejoins the field where it is let go: it falls, rests and can be found again', () => {
+  const { balls } = openField();
+  const i = balls.add(0, R, 0);
+  balls.hold(i);
+  balls.clearMoved();
+  balls.release(i, 3, 1.5, 2, 1, 0, 0);
+  assert.ok(!balls.isHeld(i) && balls.heldCount === 0);
+  assert.equal(balls.movedCount, 1, 'views redraw it');
+  steps(balls, 120);
+  assert.ok(Math.abs(balls.y[i] - R) < 1e-9, `on the floor at ${balls.y[i]}`);
+  assert.ok(balls.x[i] > 3, 'kept its throw');
+  assert.equal(balls.simulatedCount, 0, 'asleep again');
+  const out = new Int32Array(4);
+  assert.equal(balls.findFree(balls.x[i] - 0.1, balls.x[i] + 0.1, balls.z[i] - 0.1, balls.z[i] + 0.1, out), 1);
+  assert.equal(out[0], i);
+  balls.release(i, 0, 0, 0, 0, 0, 0); // not held: nothing happens
+  assert.ok(Math.abs(balls.y[i] - R) < 1e-9);
+});
+
 test('tier boxes: body front and bucket back are the shared (shut) faces', () => {
   for (const tier of Config.tractor.tiers) {
     const [body, bucket] = tier.pusher;
     assert.equal(body.maxZ, bucket.minZ);
     assert.equal(body.shut, PusherFace.Front);
     assert.equal(bucket.shut, PusherFace.Back);
+  }
+});
+
+test('tier buckets: the cavity lies inside the bucket box, and the box is as high as a full heap', () => {
+  for (const tier of Config.tractor.tiers) {
+    const box = tier.pusher[1];
+    const cavity = tier.bucket;
+    assert.ok(cavity.halfX <= box.halfX && cavity.minZ >= box.minZ && cavity.maxZ <= box.maxZ, JSON.stringify(cavity));
+    assert.ok(box.top >= cavity.rim + Config.bucket.heapLayers * D - 1e-9, `box top ${box.top}`);
+    assert.ok(cavity.maxZ - cavity.minZ >= D && 2 * cavity.halfX >= 2 * D, 'room for at least two balls a layer');
   }
 });

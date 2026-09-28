@@ -11,6 +11,7 @@ import { CameraRigView } from '../camera/CameraRigView';
 import { JoystickModel } from '../input/JoystickModel';
 import { JoystickView } from '../input/JoystickView';
 import { MoveInput } from '../input/MoveInput';
+import { Bucket } from '../tractor/Bucket';
 import { TractorModel } from '../tractor/TractorModel';
 import { TractorView } from '../tractor/TractorView';
 import type { ObstacleGrid } from '../world/ObstacleGrid';
@@ -22,9 +23,9 @@ const tmpForward = new Vec3();
 
 /**
  * Composition root: creates the models, wires them to the scene's views and drives the frame in a
- * fixed order (update: input, then tractor -> balls in steps of at most Config.time.maxStep;
- * lateUpdate: views and camera). The only place that knows every system (Unity analogy: a
- * bootstrap MonoBehaviour).
+ * fixed order (update: input, then tractor -> scoop -> balls -> carry in steps of at most
+ * Config.time.maxStep; lateUpdate: views and camera). The only place that knows every system
+ * (Unity analogy: a bootstrap MonoBehaviour).
  */
 @ccclass('GameRoot')
 export class GameRoot extends Component {
@@ -52,6 +53,7 @@ export class GameRoot extends Component {
   private moveInput!: MoveInput;
   private tractor!: TractorModel;
   private balls!: BallField;
+  private bucket!: Bucket;
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
@@ -72,6 +74,9 @@ export class GameRoot extends Component {
     const centres = layCarpet(carpet, radius, maxCount, this.obstacles);
     this.balls = new BallField(Config.balls, centres.length / 2, this.obstacles);
     for (let k = 0; k < centres.length; k += 2) this.balls.add(centres[k], radius, centres[k + 1]);
+    const slots = Math.max(...Config.tractor.tiers.map((t) => t.bucketCapacity));
+    const pile = { ...Config.bucket, radius, gravity: Config.balls.gravity };
+    this.bucket = new Bucket(pile, this.balls, this.tractor, slots, this.events);
 
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
@@ -91,6 +96,7 @@ export class GameRoot extends Component {
       input: this.moveInput,
       tractor: this.tractor,
       balls: this.balls,
+      bucket: this.bucket,
       ballView,
       camera: this.camera,
     });
@@ -106,7 +112,10 @@ export class GameRoot extends Component {
     const step = frame / steps;
     for (let i = 0; i < steps; i++) {
       this.tractor.update(step, this.moveInput.x, this.moveInput.z);
+      // The bucket takes what is in its mouth before the balls move (and before its box could shove them).
+      this.bucket.scoop();
       this.balls.step(step, this.tractor);
+      this.bucket.carry(step);
     }
   }
 
@@ -116,8 +125,9 @@ export class GameRoot extends Component {
     this.camera.update(step, this.tractor.x, 0, this.tractor.z);
     this.cameraView!.render(this.camera);
     this.joystickView!.render();
-    this.ballView!.render(this.balls);
-    // The ball view has redrawn this frame's moved balls.
+    this.ballView!.render(this.balls, this.bucket);
+    // The ball view has redrawn this frame's moved and carried balls.
     this.balls.clearMoved();
+    this.bucket.clearMoved();
   }
 }

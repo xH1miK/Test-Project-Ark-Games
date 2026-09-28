@@ -180,9 +180,79 @@ test('the uploaded quaternion is the orientation in normalised int16', () => {
   }
 });
 
-test('a drive through the real carpet: after each frame the quads show every ball where the field has it', () => {
+/** A hand-made carrier holding ball 0 at local (lx, lz): the field gets the ball at pose ⊗ local. */
+const carrierOf = (src, px, pz, yaw, lx, lz) => {
+  const c = { count: 1, index: [0], localX: [lx], localZ: [lz], yaw, moved: true };
+  src.x[0] = px + lx * Math.cos(yaw) + lz * Math.sin(yaw);
+  src.z[0] = pz - lx * Math.sin(yaw) + lz * Math.cos(yaw);
+  return c;
+};
+/** Rotation about +Y by `a` as a quaternion. */
+const yawQuat = (a) => [0, Math.sin(a / 2), 0, Math.cos(a / 2)];
+const mul = (a, b) => [
+  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+];
+
+test('carried balls: drawn where the field has them, turned with the carrier, not rolled by its drive', () => {
+  const quads = new BallQuads(2, R, LOOK);
+  const src = source(2);
+  quads.writeAll(src);
+  const q0 = spinOf(quads, 0);
+  const b = { x: 0, y: 0, z: 0, radius: 0 };
+  // Taken into a carrier at (1, 2) facing +Z; then the carrier drives 5 units: no roll.
+  assert.equal(quads.writeCarried(carrierOf(src, 1, 2, 0, 0.2, 1.4), src), 1);
+  assert.deepEqual(spinOf(quads, 0), q0, 'being taken does not turn it');
+  assert.equal(quads.writeCarried(carrierOf(src, 1, 7, 0, 0.2, 1.4), src), 1);
+  assert.deepEqual(spinOf(quads, 0), q0, 'driving the carrier does not roll it');
+  quads.readBall(0, b);
+  assert.ok(Math.abs(b.x - src.x[0]) < 1e-6 && Math.abs(b.z - src.z[0]) < 1e-6, 'drawn where the field has it');
+  // The carrier turns a quarter to the left and on across the ±PI wrap: the ball turns with it.
+  for (const yaw of [Math.PI / 2, 0.9 * Math.PI, -0.9 * Math.PI]) {
+    quads.writeCarried(carrierOf(src, 1, 7, yaw, 0.2, 1.4), src);
+    const want = mul(yawQuat(yaw), q0);
+    for (const axis of [[1, 0, 0], [0, 1, 0]]) close(rotate(spinOf(quads, 0), axis), rotate(want, axis), 1e-9, `turned to ${yaw}`);
+  }
+  // Nothing moved: nothing written.
+  assert.equal(quads.writeCarried({ ...carrierOf(src, 1, 7, 0, 0.2, 1.4), moved: false }, src), 0);
+  // Rolling inside the carrier: a quarter circumference along its local +X; the carrier faces +X
+  // (yaw PI/2), so local +X is world -Z and the top rolls to face -Z.
+  const quads2 = new BallQuads(1, R, LOOK);
+  const src2 = source(1);
+  quads2.writeAll(src2);
+  const r = quads2.radius[0];
+  quads2.writeCarried(carrierOf(src2, 0, 0, Math.PI / 2, 0, 1.4), src2);
+  const top = rotate(conj(spinOf(quads2, 0)), [0, 1, 0]);
+  quads2.writeCarried(carrierOf(src2, 0, 0, Math.PI / 2, (Math.PI / 2) * r, 1.4), src2);
+  close(rotate(spinOf(quads2, 0), top), [0, 0, -1], 1e-9, 'rolled toward local +X = world -Z');
+});
+
+test('a ball handed back to the field rolls on from where it is, not from where it was taken', () => {
+  const quads = new BallQuads(1, R, LOOK);
+  const src = source(1);
+  quads.writeAll(src);
+  quads.writeCarried(carrierOf(src, 0, 0, 0, 0, 1.4), src);
+  const q = spinOf(quads, 0);
+  // Released 10 units away: the jump is no roll.
+  src.x[0] = 10;
+  src.z[0] = 10;
+  src.moved[0] = 0;
+  src.movedCount = 1;
+  quads.writeMoved(src);
+  assert.deepEqual(spinOf(quads, 0), q);
+  // From there it rolls as any free ball.
+  src.movedCount = 0;
+  move(src, 0, 0.3, 0);
+  quads.writeMoved(src);
+  const angle = 2 * Math.acos(Math.min(1, Math.abs(spinOf(quads, 0).reduce((s, v, k) => s + v * q[k], 0))));
+  assert.ok(Math.abs(angle - 0.3 / quads.radius[0]) < 1e-9, `rolled ${angle}`);
+});
+
+test('a drive through the real carpet: after each frame the quads show every ball where the field has it, carried ones too', () => {
   const world = makeWorld();
-  const { balls } = world;
+  const { balls, bucket } = world;
   const quads = new BallQuads(balls.capacity, world.settings.radius, LOOK);
   quads.writeAll(balls);
   const steer = autopilot(CARPET_ROUTE.slice(0, 3));
@@ -191,10 +261,12 @@ test('a drive through the real carpet: after each frame the quads show every bal
   let frames = 0;
   for (let stick = steer(world.tractor); stick && frames < 1500; stick = steer(world.tractor), frames++) {
     frame(world, 1 / 30, stick.x, stick.z);
-    rewritten += quads.writeMoved(balls);
+    rewritten += quads.writeMoved(balls) + quads.writeCarried(bucket, balls);
     balls.clearMoved();
+    bucket.clearMoved();
   }
   assert.ok(frames > 100 && rewritten > 1000, `the drive moved balls (${rewritten} ball rewrites in ${frames} frames)`);
+  assert.equal(bucket.count, bucket.capacity, 'the bucket filled up on the way');
   let worst = 0;
   for (let i = 0; i < balls.count; i++) {
     quads.readBall(i, b);

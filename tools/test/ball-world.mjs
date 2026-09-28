@@ -6,8 +6,14 @@ import { readFileSync } from 'node:fs';
 import { Config } from '../../assets/scripts/core/Config.ts';
 import { BallField } from '../../assets/scripts/balls/BallField.ts';
 import { layCarpet } from '../../assets/scripts/balls/BallCarpet.ts';
+import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
+
+/** The bucket's settings the way GameRoot builds them. */
+export const BUCKET_SETTINGS = { ...Config.bucket, radius: Config.balls.radius, gravity: Config.balls.gravity };
+/** Most balls any tier's bucket holds. */
+export const BUCKET_SLOTS = Math.max(...Config.tractor.tiers.map((t) => t.bucketCapacity));
 
 export const LEVEL = JSON.parse(readFileSync(new URL('./fixtures/level.json', import.meta.url), 'utf8'));
 
@@ -17,8 +23,11 @@ export function arenaGrid() {
   return grid;
 }
 
-/** Arena + carpet + tractor on its start spot. `settings` overrides Config.balls. */
-export function makeWorld({ tier = 0, settings = {}, carpet = true } = {}) {
+/**
+ * Arena + carpet + tractor on its start spot, and the bucket unless `bucket: false` (then the bucket
+ * box only pushes, as before M5). `settings` overrides Config.balls.
+ */
+export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = true, events = null } = {}) {
   const grid = arenaGrid();
   const ballSettings = { ...Config.balls, ...settings };
   const centres = carpet ? layCarpet(ballSettings.carpet, ballSettings.radius, ballSettings.maxCount, grid) : new Float64Array(0);
@@ -27,16 +36,19 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true } = {}) {
   const tractor = new TractorModel(Config.tractor, Config.tractor.tiers[tier], grid);
   const start = LEVEL.spots.tractorStart;
   tractor.place(start.x, start.z, (start.yaw * Math.PI) / 180);
-  return { grid, balls, tractor, settings: ballSettings };
+  const scoop = bucket ? new Bucket({ ...BUCKET_SETTINGS, radius: ballSettings.radius, gravity: ballSettings.gravity }, balls, tractor, BUCKET_SLOTS, events) : null;
+  return { grid, balls, tractor, bucket: scoop, settings: ballSettings };
 }
 
-/** One frame the way GameRoot runs it: split into steps of at most Config.time.maxStep. */
+/** One frame the way GameRoot runs it: split into steps of at most Config.time.maxStep (tractor, scoop, balls, carry). */
 export function frame(world, dt, inputX, inputZ, onStep) {
   const steps = Math.ceil(dt / Config.time.maxStep - 1e-9);
   const h = dt / steps;
   for (let s = 0; s < steps; s++) {
     world.tractor.update(h, inputX, inputZ);
+    world.bucket?.scoop();
     world.balls.step(h, world.tractor);
+    world.bucket?.carry(h);
     onStep?.();
   }
 }
@@ -98,7 +110,10 @@ export function arenaMask(grid, radius, step = 0.1) {
   };
 }
 
-/** Worst overlaps and escapes of the current state (for checks). `outside` = left the arena or sank under the floor. */
+/**
+ * Worst overlaps and escapes of the free balls (for checks; held balls are the bucket's, see
+ * measureLoad). `outside` = left the arena or sank under the floor.
+ */
 export function measure(world) {
   const { balls, grid, tractor, settings } = world;
   const r = settings.radius;
@@ -116,6 +131,7 @@ export function measure(world) {
   const cos = Math.cos(tractor.yaw);
   const sin = Math.sin(tractor.yaw);
   for (let i = 0; i < n; i++) {
+    if (balls.isHeld(i)) continue;
     const x = balls.x[i], y = balls.y[i], z = balls.z[i];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) nan++;
     if (!world.inArena(x, z) || y < r - 1e-9) outside++;
@@ -137,11 +153,13 @@ export function measure(world) {
   const b = settings.bounds, cell = 2 * r, cols = Math.ceil((b.maxX - b.minX) / cell), rows = Math.ceil((b.maxZ - b.minZ) / cell);
   const buckets = new Map();
   for (let i = 0; i < n; i++) {
+    if (balls.isHeld(i)) continue;
     const key = Math.floor((balls.x[i] - b.minX) / cell) + Math.floor((balls.z[i] - b.minZ) / cell) * cols;
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(i);
   }
   for (let i = 0; i < n; i++) {
+    if (balls.isHeld(i)) continue;
     const c = Math.floor((balls.x[i] - b.minX) / cell), k = Math.floor((balls.z[i] - b.minZ) / cell);
     for (let kk = k - 1; kk <= k + 1; kk++) for (let cc = c - 1; cc <= c + 1; cc++) {
       if (cc < 0 || kk < 0 || cc >= cols || kk >= rows) continue;
@@ -159,6 +177,37 @@ export function measure(world) {
 
 /** Ball-ball overlap that counts as deep (visible interpenetration), units. */
 export const DEEP = 0.1;
+
+/**
+ * The bucket's load right now: how far a carried ball is outside the cavity beyond the slack it is
+ * still being drawn in by (below the floor, past a side, the back wall or the lip; the heap above the
+ * rim is allowed), the worst overlap of two carried balls, the lowest carried ball, whether the field
+ * has each carried ball at pose ⊗ local, and whether every carried ball is held.
+ */
+export function measureLoad(world) {
+  const { balls, tractor, bucket, settings } = world;
+  const r = settings.radius;
+  const load = bucket.load;
+  const s = load.shape;
+  const cos = Math.cos(tractor.yaw);
+  const sin = Math.sin(tractor.yaw);
+  let outside = 0;
+  let overlap = 0;
+  let lowest = Infinity;
+  let placed = 0;
+  let notHeld = 0;
+  for (let k = 0; k < load.count; k++) {
+    const x = load.x[k], y = load.y[k], z = load.z[k];
+    const breach = Math.max(s.floor + r - y, Math.abs(x) - (s.halfX - r), s.minZ + r - z, z - (s.maxZ - r));
+    outside = Math.max(outside, breach - load.slack[k]);
+    lowest = Math.min(lowest, y + load.slack[k]);
+    for (let j = k + 1; j < load.count; j++) overlap = Math.max(overlap, 2 * r - Math.hypot(load.x[j] - x, load.y[j] - y, load.z[j] - z));
+    const i = load.index[k];
+    if (!balls.isHeld(i)) notHeld++;
+    placed = Math.max(placed, Math.abs(balls.x[i] - (tractor.x + x * cos + z * sin)), Math.abs(balls.y[i] - y), Math.abs(balls.z[i] - (tractor.z - x * sin + z * cos)));
+  }
+  return { count: load.count, outside: Math.max(0, outside), overlap: Math.max(0, overlap), lowest, placed, notHeld, heldTotal: balls.heldCount };
+}
 
 /**
  * Drives legs in the format of the browser scenarios' autopilot (tools/scenarios/lib/autopilot.mjs),

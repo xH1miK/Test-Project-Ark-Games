@@ -21,12 +21,29 @@ export interface PusherBox {
   readonly shut: number;
 }
 
+/**
+ * The inside of a bucket, in the tractor's axes (x to the side, z forward, y up from the ground):
+ * where carried balls may sit. The pile may heap `Config.bucket.heapLayers` ball layers above the rim.
+ */
+export interface BucketShape {
+  /** Half width between the inner side walls. */
+  readonly halfX: number;
+  /** Inner back wall and the front lip. */
+  readonly minZ: number;
+  readonly maxZ: number;
+  /** Inner floor and the top of the back wall. */
+  readonly floor: number;
+  readonly rim: number;
+}
+
 /** Stats of one tractor tier. Tier 1 is index 0. */
 export interface TractorTierConfig {
   /** Top speed, units/s. */
   readonly speed: number;
   /** Balls the bucket can hold. */
   readonly bucketCapacity: number;
+  /** Inside of the bucket (the carried pile and the scoop's intake). */
+  readonly bucket: BucketShape;
   /** Radius of the body circle used against static obstacles. */
   readonly bodyRadius: number;
   /**
@@ -68,18 +85,24 @@ export const Config = {
       // Tractor1 spans z -0.77..1.88 around its pivot (bucket in front), half width 0.85.
       {
         speed: 3.6, bucketCapacity: 8, bodyRadius: 1.2, bodyOffset: 0.55,
+        // Measured on the mesh: inner side walls at ±0.67..0.69, floor plate ~0.06, teeth tips at z 1.875;
+        // the back wall is a curve (z 1.1 at mid height, 1.45 at the floor), so a ball centre stays at
+        // z >= ~1.44 -> the wall plane at 1.16. The back is 0.75 high, the sides slope down to 0.15 at the lip.
+        bucket: { halfX: 0.68, minZ: 1.16, maxZ: 1.875, floor: 0.07, rim: 0.75 },
         pusher: [
           { halfX: 0.85, minZ: -0.77, maxZ: 1.03, top: 1.3, shut: PusherFace.Front }, // body
-          // Bucket: solid like a full bucket; the scoop (M5) turns it into an intake.
-          { halfX: 0.74, minZ: 1.03, maxZ: 1.88, top: 0.75, shut: PusherFace.Back },
+          // Bucket: always solid, as high as a full heap (rim + 2 layers); while there is room the
+          // scoop takes what is in front of it before this box can shove it, so a full bucket pushes.
+          { halfX: 0.74, minZ: 1.03, maxZ: 1.88, top: 1.85, shut: PusherFace.Back },
         ],
       },
-      // Tractor2 (sizes from the example): bodyOffset to be measured when its model goes in (progression stage).
+      // Tractor2 (sizes from the example): bodyOffset and the bucket to be measured when its model goes in (progression stage).
       {
         speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0,
+        bucket: { halfX: 1.57, minZ: 1.95, maxZ: 3.07, floor: 0.05, rim: 1.4 },
         pusher: [
           { halfX: 1.5, minZ: -1.37, maxZ: 1.82, top: 3, shut: PusherFace.Front },
-          { halfX: 1.7, minZ: 1.82, maxZ: 3.07, top: 1.4, shut: PusherFace.Back },
+          { halfX: 1.7, minZ: 1.82, maxZ: 3.07, top: 2.5, shut: PusherFace.Back },
         ],
       },
     ] as readonly TractorTierConfig[],
@@ -95,6 +118,32 @@ export const Config = {
     collisionPasses: 4,
     /** Longest movement step, s; slower frames are split into several steps. */
     maxStep: MAX_STEP,
+  },
+
+  /** The load in the bucket (a small pile in the tractor's axes; numbers from the example). */
+  bucket: {
+    /** Ball layers the pile may heap above the rim; higher up it narrows into a mound. */
+    heapLayers: 2,
+    /** How much the pile narrows per unit of height above the heap's top (each side). */
+    heapSlope: 1.4,
+    /** Share of its speed relative to the tractor a scooped ball keeps as it drops in. */
+    keep: 0.9,
+    /** Share of horizontal speed a carried ball loses per second. */
+    damping: 2.5,
+    /** Contact passes per step (every pair of carried balls is tested). */
+    passes: 4,
+    /**
+     * Share of the diameter two carried balls may overlap before they are pushed apart: a squeezed
+     * load sits lower and wider in the bucket. 0.1: T1's 8 top out at ~1.4 like the example's
+     * (whose load overlaps by 0.08-0.17 units); 0.02 stacks them two wide up to ~1.9.
+     */
+    contactSlop: 0.1,
+    /** The pile goes to sleep this long after the last disturbance (a ball taken or handed over), s. */
+    settleTime: 0.8,
+    /** A ball scooped at the lip is drawn inside the walls at this speed, units/s (it is not snapped in). */
+    drawIn: 4,
+    /** Fastest a carried ball moves inside the bucket, units/s. */
+    maxSpeed: 8,
   },
 
   camera: {

@@ -5,7 +5,7 @@
  * Pure TypeScript: no engine imports.
  */
 
-import type { PusherBox, TractorTierConfig } from '../core/Config';
+import type { BucketShape, PusherBox, TractorTierConfig } from '../core/Config';
 import { Blocks } from '../world/ObstacleGrid';
 import type { CircleBlocker, XZ } from '../world/ObstacleGrid';
 
@@ -55,6 +55,15 @@ export class TractorModel {
   /** Boxes that shove balls aside, in the tractor's axes (the tractor is the balls' BallPusher). */
   get pusherBoxes(): readonly PusherBox[] {
     return this.tier.pusher;
+  }
+
+  /** Inside of the current tier's bucket and how many balls it holds (the tractor carries the Bucket). */
+  get bucketShape(): BucketShape {
+    return this.tier.bucket;
+  }
+
+  get bucketCapacity(): number {
+    return this.tier.bucketCapacity;
   }
 
   /** Centre of the body circle (what collides): bodyOffset ahead of the pivot. */

@@ -10,6 +10,11 @@
  *
  * One step: predict (gravity, friction, kerb) -> contact passes (ball-ball, floor, pusher, static
  * obstacles, field edges) -> velocity from the displacement -> rest and heat.
+ *
+ * A ball can be held out of the field (the bucket carries it, later it flies into the shredder): it
+ * keeps its index but leaves the grid, so it is neither simulated nor anyone's neighbour; its holder
+ * moves it with place() and may release() it back. Indices never change, so views can key per-ball
+ * data by them.
  */
 
 import type { PusherBox, XZBounds } from '../core/Config';
@@ -111,6 +116,9 @@ export class BallField {
   private readonly kx: Float64Array;
   private readonly kz: Float64Array;
   private readonly flags: Uint8Array;
+  /** 1 for a ball held out of the field (see hold()). */
+  private readonly held: Uint8Array;
+  private heldTotal = 0;
   /** Step in which a ball was last simulated; equals `stepNo` for the balls of the current step. */
   private readonly stamp: Int32Array;
   private readonly movedMark: Uint8Array;
@@ -158,6 +166,7 @@ export class BallField {
     this.kx = new Float64Array(capacity);
     this.kz = new Float64Array(capacity);
     this.flags = new Uint8Array(capacity);
+    this.held = new Uint8Array(capacity);
     this.stamp = new Int32Array(capacity);
     this.moved = new Int32Array(capacity);
     this.movedMark = new Uint8Array(capacity);
@@ -219,6 +228,82 @@ export class BallField {
   /** Wakes every ball within a square of half size `half` around (x, z), e.g. before a burst. */
   wake(x: number, z: number, half: number): void {
     this.heatRect(x - half, x + half, z - half, z + half);
+  }
+
+  /** Balls held out of the field right now. */
+  get heldCount(): number {
+    return this.heldTotal;
+  }
+
+  /** True when ball i is held out of the field (carried, flying), not simulated by it. */
+  isHeld(i: number): boolean {
+    return this.held[i] === 1;
+  }
+
+  /**
+   * Free balls whose centres lie in the XZ rectangle, written to `out` (at most out.length of them);
+   * returns how many. Held balls are not in the field, so they are never found.
+   */
+  findFree(minX: number, maxX: number, minZ: number, maxZ: number, out: Int32Array): number {
+    const { x, z, head, next } = this;
+    const a = this.cellAt(minX, minZ);
+    const b = this.cellAt(maxX, maxZ);
+    const c0 = a % this.cols;
+    const c1 = b % this.cols;
+    const r0 = (a - c0) / this.cols;
+    const r1 = (b - c1) / this.cols;
+    let n = 0;
+    for (let rr = r0; rr <= r1; rr++) {
+      for (let cc = c0; cc <= c1; cc++) {
+        for (let i = head[rr * this.cols + cc]; i >= 0; i = next[i]) {
+          if (x[i] < minX || x[i] > maxX || z[i] < minZ || z[i] > maxZ) continue;
+          if (n === out.length) return n;
+          out[n++] = i;
+        }
+      }
+    }
+    return n;
+  }
+
+  /**
+   * Takes ball i out of the field: it is no longer simulated nor anyone's neighbour, and its
+   * neighbours wake (the ones resting on it fall into the gap). Its holder moves it with place().
+   */
+  hold(i: number): void {
+    if (this.held[i]) return;
+    this.held[i] = 1;
+    this.heldTotal++;
+    this.heatAround(this.cellOf[i]);
+    this.unlink(i);
+    this.vx[i] = this.vy[i] = this.vz[i] = 0;
+    this.kx[i] = this.kz[i] = 0;
+  }
+
+  /** Moves a held ball (its holder carries it); views read the new position. Free balls are left alone. */
+  place(i: number, x: number, y: number, z: number): void {
+    if (!this.held[i]) return;
+    this.x[i] = x;
+    this.y[i] = y;
+    this.z[i] = z;
+  }
+
+  /** Puts a held ball back into the field at (x, y, z) with a velocity; it and its neighbours wake. */
+  release(i: number, x: number, y: number, z: number, vx: number, vy: number, vz: number): void {
+    if (!this.held[i]) return;
+    this.held[i] = 0;
+    this.heldTotal--;
+    const { bounds } = this.settings;
+    const r = this.radius;
+    this.x[i] = clamp(x, bounds.minX + r, bounds.maxX - r);
+    this.y[i] = Math.max(y, r);
+    this.z[i] = clamp(z, bounds.minZ + r, bounds.maxZ - r);
+    this.vx[i] = vx;
+    this.vy[i] = vy;
+    this.vz[i] = vz;
+    this.flags[i] = 0; // the contact passes find its floor or support again
+    this.link(i, this.cellAt(this.x[i], this.z[i]));
+    this.heatAround(this.cellOf[i]);
+    this.markMoved(i);
   }
 
   /** Forgets the moved list once a view has redrawn it. */

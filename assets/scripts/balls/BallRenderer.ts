@@ -1,7 +1,7 @@
 import { _decorator, Component, Material, RenderingSubMesh, Vec3, director, gfx, renderer } from 'cc';
 import type { XZBounds } from '../core/Config';
 import { BallQuads, DYNAMIC_STRIDE, STATIC_STRIDE } from './BallQuads';
-import type { BallLookSettings, BallSource } from './BallQuads';
+import type { BallLookSettings, BallSource, CarriedSource } from './BallQuads';
 
 const { ccclass, property } = _decorator;
 
@@ -12,8 +12,8 @@ const TOP = 6;
  * Draws every ball in one draw call: one camera-facing quad per ball in a single mesh, shaded as a
  * sphere by the BallImpostor effect (Unity analogy: Graphics.DrawMesh of one procedural mesh with a
  * custom shader instead of a GameObject per ball). Knows no game rules: GameRoot hands it the ball
- * field every frame; it rewrites only the balls that moved (BallQuads) and uploads the dynamic
- * vertex stream once.
+ * field and the bucket's load every frame; it rewrites only the balls that moved (BallQuads) and
+ * uploads the dynamic vertex stream once.
  *
  * It owns a render-scene model rather than a MeshRenderer: the dynamic stream is a host-visible
  * buffer (DYNAMIC_DRAW; on iOS the engine re-specifies such a buffer instead of patching one the
@@ -83,10 +83,15 @@ export class BallRenderer extends Component {
     if (this.enabledInHierarchy) this.attach();
   }
 
-  /** Rewrites the balls moved since the last call and uploads them (GameRoot calls it every frame, before clearMoved). */
-  render(field: BallSource): void {
+  /**
+   * Rewrites the balls the field moved and the carried ones that moved, then uploads once
+   * (GameRoot calls it every frame, before clearing their moved lists).
+   */
+  render(field: BallSource, carried: CarriedSource | null = null): void {
     if (!this.quads || !this.dynamicBuffer) return;
-    if (this.quads.writeMoved(field) === 0) return;
+    let written = this.quads.writeMoved(field);
+    if (carried) written += this.quads.writeCarried(carried, field);
+    if (written === 0) return;
     this.dynamicBuffer.update(this.quads.dynamicBytes);
     this.uploads++;
   }
