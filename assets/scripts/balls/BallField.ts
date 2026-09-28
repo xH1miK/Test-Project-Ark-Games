@@ -8,8 +8,9 @@
  * simulated: cells under a moving pusher and around a moving ball stay hot for a few steps; the
  * rest of the carpet sleeps and costs nothing.
  *
- * One step: predict (gravity, friction, kerb) -> contact passes (ball-ball, floor, pusher, static
- * obstacles, field edges) -> velocity from the displacement -> rest and heat.
+ * One step: predict (gravity, friction, kerb, clear zones) -> contact passes (ball-ball, floor, pusher,
+ * static obstacles, field edges) -> velocity from the displacement -> rest and heat. Clear zones (pay
+ * pads) are soft: a ball on one rolls off it, but the pusher and the walls still win.
  *
  * A ball can be held out of the field (the bucket carries it, it flies into the shredder): it keeps
  * its index but leaves the grid, so it is neither simulated nor anyone's neighbour; its holder moves
@@ -65,6 +66,20 @@ export interface BallPusher {
   /** Heading about +Y, Cocos convention: local +Z points to (sin yaw, cos yaw), local +X to (cos yaw, -sin yaw). */
   readonly yaw: number;
   readonly pusherBoxes: readonly PusherBox[];
+}
+
+/**
+ * A rectangle on the ground (world XZ) balls are kept off while it is active, e.g. a pay pad's plate:
+ * a ball whose centre is inside rolls off toward the nearest edge at least `speed` units/s. It works
+ * before the pusher, so the tractor can still shove balls onto it (and never into itself).
+ */
+export interface ClearZone {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+  readonly speed: number;
+  readonly active: boolean;
 }
 
 /** Ball flags. */
@@ -153,6 +168,10 @@ export class BallField {
   private pusherSpeed = 0;
   private readonly resolved: XZ = { x: 0, z: 0 };
   private readonly faceGap = { value: 0 };
+  private readonly zones: ClearZone[] = [];
+  /** Whether each zone was active in the last step, and the ones active in this step. */
+  private readonly zoneWasActive: boolean[] = [];
+  private readonly liveZones: ClearZone[] = [];
 
   constructor(settings: BallFieldSettings, capacity: number, blocker: CircleBlocker) {
     this.settings = settings;
@@ -233,6 +252,47 @@ export class BallField {
   /** Wakes every ball within a square of half size `half` around (x, z), e.g. before a burst. */
   wake(x: number, z: number, half: number): void {
     this.heatRect(x - half, x + half, z - half, z + half);
+  }
+
+  /** Keeps balls off `zone` whenever it is active (it is read every step). */
+  addClearZone(zone: ClearZone): void {
+    this.zones.push(zone);
+    this.zoneWasActive.push(false);
+  }
+
+  /**
+   * Throws the free balls within `radius` of (x, z) outward, as when something pops up among them:
+   * `speed` units/s at the centre, less toward the rim (a quarter of it there), and upward by `hop`
+   * times that. They and their surroundings wake.
+   */
+  burst(x: number, z: number, radius: number, speed: number, hop: number): void {
+    const { head, next } = this;
+    const a = this.cellAt(x - radius, z - radius);
+    const b = this.cellAt(x + radius, z + radius);
+    const c0 = a % this.cols;
+    const c1 = b % this.cols;
+    const r0 = (a - c0) / this.cols;
+    const r1 = (b - c1) / this.cols;
+    for (let rr = r0; rr <= r1; rr++) {
+      for (let cc = c0; cc <= c1; cc++) {
+        for (let i = head[rr * this.cols + cc]; i >= 0; i = next[i]) {
+          const dx = this.x[i] - x;
+          const dz = this.z[i] - z;
+          const d = Math.sqrt(dx * dx + dz * dz);
+          if (d > radius) continue;
+          // A ball right at the centre goes its own way (golden-angle spread by index).
+          const angle = i * 2.399963;
+          const nx = d > 1e-6 ? dx / d : Math.sin(angle);
+          const nz = d > 1e-6 ? dz / d : Math.cos(angle);
+          const v = speed * Math.max(0.25, 1 - d / radius);
+          this.vx[i] = nx * v;
+          this.vz[i] = nz * v;
+          this.vy[i] = Math.max(this.vy[i], v * hop);
+        }
+      }
+    }
+    const margin = this.cellSize;
+    this.heatRect(x - radius - margin, x + radius + margin, z - radius - margin, z + radius + margin);
   }
 
   /** Balls held out of the field right now (carried, flying or removed for good). */
@@ -361,6 +421,7 @@ export class BallField {
     this.activeCount = 0;
     this.pairChecks = 0;
     if (this.trackPusher(dt, pusher)) this.heatPusher(pusher!);
+    this.updateZones();
     this.gather();
     if (this.activeCount > 0) {
       this.predict(dt);
@@ -432,6 +493,29 @@ export class BallField {
     this.heatRect(minX - margin, maxX + margin, minZ - margin, maxZ + margin);
   }
 
+  /** Lists the clear zones active in this step; a zone that has just turned on wakes the balls on it. */
+  private updateZones(): void {
+    const { zones, zoneWasActive, liveZones } = this;
+    liveZones.length = 0;
+    for (let k = 0; k < zones.length; k++) {
+      const zone = zones[k];
+      const on = zone.active;
+      if (on && !zoneWasActive[k]) this.heatRect(zone.minX, zone.maxX, zone.minZ, zone.maxZ);
+      zoneWasActive[k] = on;
+      if (on) liveZones.push(zone);
+    }
+  }
+
+  /** The first active clear zone holding the point, or null. */
+  private zoneAt(x: number, z: number): ClearZone | null {
+    const live = this.liveZones;
+    for (let k = 0; k < live.length; k++) {
+      const zone = live[k];
+      if (x >= zone.minX && x <= zone.maxX && z >= zone.minZ && z <= zone.maxZ) return zone;
+    }
+    return null;
+  }
+
   /** Puts every ball of the hot cells into the simulated set. */
   private gather(): void {
     const { hotList, head, next } = this;
@@ -489,6 +573,35 @@ export class BallField {
       if (kerb > 0 && (bx !== 0 || bz !== 0)) {
         bx += kerbPush(x[i] - loX, band, kerb) - kerbPush(hiX - x[i], band, kerb);
         bz += kerbPush(z[i] - loZ, band, kerb) - kerbPush(hiZ - z[i], band, kerb);
+      }
+      // A ball on a kept-clear zone rolls off it through the nearest edge, resting or not.
+      const zone = this.liveZones.length > 0 ? this.zoneAt(x[i], z[i]) : null;
+      if (zone) {
+        const toMinX = x[i] - zone.minX;
+        const toMaxX = zone.maxX - x[i];
+        const toMinZ = z[i] - zone.minZ;
+        const toMaxZ = zone.maxZ - z[i];
+        let ex = -1;
+        let ez = 0;
+        let best = toMinX;
+        if (toMaxX < best) {
+          best = toMaxX;
+          ex = 1;
+        }
+        if (toMinZ < best) {
+          best = toMinZ;
+          ex = 0;
+          ez = -1;
+        }
+        if (toMaxZ < best) {
+          ex = 0;
+          ez = 1;
+        }
+        const along = bx * ex + bz * ez;
+        if (along < zone.speed) {
+          bx += (zone.speed - along) * ex;
+          bz += (zone.speed - along) * ez;
+        }
       }
       let mx = bx * dt;
       let my = by * dt;
@@ -797,7 +910,9 @@ export class BallField {
       vy[i] = nvy;
       vz[i] = nvz;
       if (moved2 > 0) this.markMoved(i);
-      if (!supported || moved2 > still2 || nvx !== 0 || nvy !== 0 || nvz !== 0) this.heatAround(cellOf[i]);
+      // A ball still on a kept-clear zone (jammed by its neighbours) stays awake until it is off.
+      const onZone = this.liveZones.length > 0 && this.zoneAt(x[i], z[i]) !== null;
+      if (!supported || moved2 > still2 || nvx !== 0 || nvy !== 0 || nvz !== 0 || onZone) this.heatAround(cellOf[i]);
     }
   }
 

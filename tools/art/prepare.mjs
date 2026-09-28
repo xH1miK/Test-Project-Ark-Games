@@ -34,6 +34,10 @@ const SPECS = {
   // sliced: its rounded ends keep their shape at any width).
   coin: { src: 'coin.png', out: 'assets/textures/ui/coin.png', size: 128, format: 'png', palette: true, quality: 90, crop: 'circle' },
   coinPlate: { src: 'coin_plate.png', out: 'assets/textures/ui/coin_plate.png', height: 90, format: 'png', palette: true, quality: 90, crop: 'trim' },
+  // Pay pad plates lying on the ground (world-space UI drawn by the main camera): under 512 wide, so
+  // they go into the dynamic atlas and batch with the counter's bitmap font.
+  padUpgrade: { src: 'pad_upgrade.png', out: 'assets/textures/ui/pad_upgrade.png', height: 150, format: 'png', palette: true, quality: 90, crop: 'trim' },
+  padUnlock: { src: 'pad_unlock.png', out: 'assets/textures/ui/pad_unlock.png', height: 124, format: 'png', palette: true, quality: 90, crop: 'trim' },
 };
 
 /**

@@ -446,3 +446,122 @@ test('tier buckets: the cavity lies inside the bucket box, and the box is as hig
     assert.ok(cavity.maxZ - cavity.minZ >= D && 2 * cavity.halfX >= 2 * D, 'room for at least two balls a layer');
   }
 });
+
+// --- clear zones (pay pads) and bursts ---
+
+/** A clear zone whose `active` can be switched by the test. */
+const zoneOf = (minX, maxX, minZ, maxZ, on = true) => ({ minX, maxX, minZ, maxZ, speed: Config.pads.clearSpeed, active: on });
+const insideZone = (balls, zone) => [...Array(balls.count).keys()].filter((i) =>
+  !balls.isHeld(i) && balls.x[i] >= zone.minX && balls.x[i] <= zone.maxX && balls.z[i] >= zone.minZ && balls.z[i] <= zone.maxZ);
+/** Deepest a free ball sits inside the pusher's boxes (pusher axes, same measure as the scenarios). */
+const depthInPusher = (balls, pusher) => {
+  let worst = 0;
+  const cos = Math.cos(pusher.yaw), sin = Math.sin(pusher.yaw);
+  for (let i = 0; i < balls.count; i++) {
+    if (balls.isHeld(i)) continue;
+    const dx = balls.x[i] - pusher.x, dz = balls.z[i] - pusher.z;
+    const lx = dx * cos - dz * sin, lz = dx * sin + dz * cos;
+    for (const box of pusher.pusherBoxes) {
+      if (balls.y[i] - R > box.top) continue;
+      const qx = Math.max(-box.halfX, Math.min(box.halfX, lx)), qz = Math.max(box.minZ, Math.min(box.maxZ, lz));
+      const d = Math.hypot(lx - qx, lz - qz);
+      worst = Math.max(worst, d > 0 ? R - d : R + Math.min(box.halfX - Math.abs(lx), lz - box.minZ, box.maxZ - lz));
+    }
+  }
+  return worst;
+};
+
+test('a clear zone: balls on it roll off through the nearest edge once it is active; others are untouched', () => {
+  const { balls } = openField();
+  const zone = zoneOf(-2.2, 2.2, -0.9, 0.9, false);
+  balls.addClearZone(zone);
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 7; col++) balls.add(-1.8 + col * 0.6, R, -0.6 + row * 0.6);
+  const far = balls.add(8, R, 8);
+  const before = snapshot(balls);
+  steps(balls, 60);
+  assert.deepEqual(snapshot(balls), before, 'inactive: nothing moves (the balls sleep)');
+  zone.active = true;
+  let clearAt = -1;
+  steps(balls, 150, null, 1 / 60, (k) => {
+    if (clearAt < 0 && insideZone(balls, zone).length === 0) clearAt = k;
+  });
+  assert.ok(clearAt >= 0 && clearAt < 90, `plate clear after ${clearAt} steps`);
+  assert.deepEqual([balls.x[far], balls.z[far]], [8, 8], 'the far ball stays put');
+  // The middle row (z 0) leaves across the long sides, nobody goes past the short ends by much.
+  for (let i = 0; i < 21; i++) assert.ok(Math.abs(balls.x[i]) < 3.2, `ball ${i} at x ${balls.x[i]}`);
+  let asleep = false;
+  for (let k = 0; k < 180 && !asleep; k++) {
+    balls.step(1 / 60, null);
+    asleep = balls.simulatedCount === 0;
+  }
+  assert.ok(asleep, 'all asleep again off the plate');
+  assert.equal(insideZone(balls, zone).length, 0);
+});
+
+test('the pusher wins over a clear zone: shoving balls onto a pad never leaves one inside the tractor', () => {
+  for (const dt of [1 / 60, 1 / 30]) {
+    const { balls } = openField();
+    const zone = zoneOf(-2.2, 2.2, 2.5, 4.4);
+    balls.addClearZone(zone);
+    // A berm across the way in front of the zone.
+    for (let row = 0; row < 3; row++) for (let col = 0; col < 9; col++) balls.add(-2.4 + col * 0.6, R, 1.2 + row * 0.56);
+    let worst = 0;
+    for (let t = 0; t < 2.5; t += dt) {
+      const pusher = pusherAt(0.2, -1 + 3.6 * t, 0);
+      balls.step(dt, pusher);
+      worst = Math.max(worst, depthInPusher(balls, pusher));
+    }
+    assert.ok(worst < 0.06, `deepest in the tractor ${worst.toFixed(3)} at dt ${dt}`);
+    // Parked past the zone: what it dragged along rolls off the plate.
+    const parked = pusherAt(0.2, 8, 0);
+    steps(balls, 180, parked, dt);
+    assert.equal(insideZone(balls, zone).length, 0, 'plate clear once the tractor has passed');
+  }
+});
+
+test('burst: balls within the radius fly outward, fastest at the centre; the rest stay asleep', () => {
+  const { balls } = openField();
+  for (let row = -8; row <= 8; row++) for (let col = -8; col <= 8; col++) balls.add(col * 0.6 + (row & 1) * 0.3, R, row * 0.52);
+  const { radius, speed, hop } = Config.pads.burst;
+  balls.burst(0.1, 0.05, radius, speed, hop);
+  let inside = 0;
+  for (let i = 0; i < balls.count; i++) {
+    const dx = balls.x[i] - 0.1, dz = balls.z[i] - 0.05, d = Math.hypot(dx, dz);
+    const v = Math.hypot(balls.vx[i], balls.vz[i]);
+    if (d > radius) {
+      assert.equal(v, 0, `ball ${i} outside the radius`);
+      continue;
+    }
+    inside++;
+    assert.ok(Math.abs(v - speed * Math.max(0.25, 1 - d / radius)) < 1e-9, `speed ${v} at ${d}`);
+    assert.ok((balls.vx[i] * dx + balls.vz[i] * dz) / (v * d) > 0.999, 'radial');
+    assert.ok(Math.abs(balls.vy[i] - v * hop) < 1e-9, 'hop');
+  }
+  assert.ok(inside > 60, `${inside} thrown`);
+  steps(balls, 240);
+  for (let i = 0; i < balls.count; i++) assert.ok(Number.isFinite(balls.x[i] + balls.y[i] + balls.z[i]));
+  assert.equal(balls.simulatedCount, 0, 'asleep again within 4 s');
+});
+
+test('a pad popping up in the real carpet: its plate is cleared, no ball leaves the arena, the carpet sleeps again', () => {
+  const world = makeWorld();
+  const pad = LEVEL.spots.upgradePad;
+  const zone = zoneOf(pad.x - 2.4, pad.x + 2.4, pad.z - 0.95, pad.z + 0.95);
+  world.balls.addClearZone(zone);
+  const onPlate = insideZone(world.balls, zone).length;
+  assert.ok(onPlate > 10, `${onPlate} balls on the plate before`);
+  const { radius, speed, hop } = Config.pads.burst;
+  world.balls.burst(pad.x, pad.z, radius, speed, hop);
+  let asleepAt = -1;
+  for (let f = 0; f < 360 && asleepAt < 0; f++) {
+    frame(world, 1 / 60, 0, 0);
+    if (world.balls.simulatedCount === 0) asleepAt = f;
+  }
+  const m = measure(world);
+  assert.equal(m.nan, 0);
+  assert.equal(m.outside, 0);
+  assert.ok(m.wall < 1e-9);
+  assert.equal(insideZone(world.balls, zone).length, 0, 'the plate is clear');
+  assert.ok(asleepAt > 0, 'asleep within 6 s');
+  assert.ok(m.overlap < 0.035, `overlap at rest ${m.overlap}`);
+});
