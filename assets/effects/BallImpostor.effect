@@ -1,0 +1,147 @@
+// Ball impostors: every ball is one camera-facing quad; the fragment shader traces the sphere inside
+// it, so the silhouette, the normal and the depth are those of a real sphere (balls cut into the
+// tractor, the rocks and each other correctly) while the whole carpet stays one draw call.
+// Vertex streams come from BallQuads/BallRenderer: a_ball (centre + radius), a_spin (orientation
+// quaternion), a_corner (quad corner, shade). Lit by the scene's main light and ambient; no shadows.
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: ball-vs:vert
+      frag: ball-fs:frag
+      rasterizerState:
+        cullMode: none
+      properties:
+        mainColor:      { value: [0.1255, 0.498, 0.5922, 1.0], editor: { type: color, tooltip: 'Base colour (sRGB)' } }
+        metallic:       { value: 0.85, target: surface.x, editor: { slide: true, range: [0, 1.0], step: 0.01 } }
+        shininess:      { value: 60.0, target: surface.y, editor: { tooltip: 'Sun glint exponent' } }
+        glint:          { value: 1.0, target: surface.z, editor: { tooltip: 'Sun glint strength' } }
+        ambient:        { value: 1.0, target: surface.w, editor: { tooltip: 'Sky/ground light strength' } }
+        diffuse:        { value: 1.0, target: light.x, editor: { tooltip: 'Sun diffuse strength' } }
+        mirror:         { value: 1.0, target: light.y, editor: { tooltip: 'Sky/ground reflection strength (the metal look)' } }
+        rimColor:       { value: [0.6, 0.9, 1.0, 1.0], editor: { type: color, tooltip: 'Fresnel rim colour (sRGB)' } }
+        rimStrength:    { value: 0.3, target: light.z }
+        rimPower:       { value: 3.0, target: light.w }
+        stripeWidth:    { value: 0.16, target: pattern.x, editor: { tooltip: 'Half width of the band round the ball, share of the radius' } }
+        stripeShade:    { value: 0.7, target: pattern.y, editor: { tooltip: 'Colour multiplier inside the band' } }
+        spotSize:       { value: 0.93, target: pattern.z, editor: { tooltip: 'Spots on the two poles off the band: cosine of their angular radius' } }
+        spotShade:      { value: 1.35, target: pattern.w, editor: { tooltip: 'Colour multiplier inside the spots' } }
+}%
+
+CCProgram ball-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in vec4 a_ball;   // xyz: centre (world), w: radius (0 hides the ball)
+  in vec4 a_spin;   // orientation quaternion (normalised int16)
+  in vec4 a_corner; // xy: quad corner 0/1, z: shade (0..1 -> 0.5..1.5)
+
+  out vec3 v_ray;    // the quad point in view space: the eye looks along it
+  out vec4 v_sphere; // centre (view space), radius
+  out vec4 v_spin;
+  out float v_shade;
+
+  vec4 vert () {
+    vec3 centre = (cc_matView * vec4(a_ball.xyz, 1.0)).xyz;
+    float r = a_ball.w;
+    float d2 = dot(centre, centre);
+    // The quad faces the eye through the centre; the rays grazing the sphere cut its plane in a
+    // circle of radius r·d/sqrt(d²-r²), so a quad of that half size just covers the silhouette.
+    vec3 toEye = -centre * inversesqrt(max(d2, 1e-8));
+    vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), toEye));
+    vec3 up = cross(toEye, side);
+    float reach = r * sqrt(d2 / max(d2 - r * r, 1e-6));
+    vec2 corner = a_corner.xy * 2.0 - 1.0;
+    vec3 p = centre + (side * corner.x + up * corner.y) * reach;
+
+    v_ray = p;
+    v_sphere = vec4(centre, r);
+    v_spin = normalize(a_spin);
+    v_shade = 0.5 + a_corner.z;
+    return cc_matProj * vec4(p, 1.0);
+  }
+}%
+
+CCProgram ball-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/output-standard>
+
+  #pragma extension([GL_EXT_frag_depth, __VERSION__ < 300])
+
+  in vec3 v_ray;
+  in vec4 v_sphere;
+  in vec4 v_spin;
+  in float v_shade;
+
+  uniform BallLook {
+    vec4 mainColor;
+    vec4 surface; // x: metallic, y: glint exponent, z: glint strength, w: ambient strength
+    vec4 light;   // x: sun diffuse strength, y: reflection strength, z: rim strength, w: rim power
+    vec4 rimColor;
+    vec4 pattern; // x: band half width, y: band shade, z: spot size (cosine), w: spot shade
+  };
+
+  // v turned by the inverse of the unit quaternion q: world axes -> the ball's own axes.
+  vec3 unspin (vec4 q, vec3 v) {
+    vec3 u = -q.xyz;
+    vec3 t = 2.0 * cross(u, v);
+    return v + q.w * t + cross(u, t);
+  }
+
+  void writeDepth (float depth) {
+    #if __VERSION__ < 300
+      #ifdef GL_EXT_frag_depth
+        gl_FragDepthEXT = depth;
+      #endif
+    #else
+      gl_FragDepth = depth;
+    #endif
+  }
+
+  vec4 frag () {
+    // The eye sits at the view-space origin: trace its ray through this pixel to the sphere.
+    vec3 dir = normalize(v_ray);
+    vec3 centre = v_sphere.xyz;
+    float r = v_sphere.w;
+    float along = dot(dir, centre);
+    vec3 miss = centre - dir * along; // from the ray's closest point to the centre (no cancellation)
+    float gap2 = r * r - dot(miss, miss);
+    if (gap2 <= 0.0) discard;
+    vec3 hit = dir * (along - sqrt(gap2));
+    vec4 clip = cc_matProj * vec4(hit, 1.0);
+    // NDC z -> window depth; cc_nearFar.z is the clip-space min z (-1 in GL, 0 elsewhere).
+    writeDepth((clip.z / clip.w - cc_nearFar.z) / (1.0 - cc_nearFar.z));
+
+    vec3 N = normalize((cc_matViewInv * vec4(hit - centre, 0.0)).xyz);
+    vec3 V = normalize((cc_matViewInv * vec4(-dir, 0.0)).xyz);
+
+    // The pattern lives on the ball: a band round it and a spot on each pole off the band.
+    vec3 own = unspin(v_spin, N);
+    float band = 1.0 - smoothstep(pattern.x - 0.05, pattern.x + 0.05, abs(own.y));
+    float spot = smoothstep(pattern.z - 0.02, pattern.z + 0.02, abs(own.x));
+    vec3 albedo = SRGBToLinear(mainColor.rgb) * v_shade * mix(1.0, pattern.y, band) * mix(1.0, pattern.w, spot);
+
+    vec3 L = normalize(-cc_mainLitDir.xyz);
+    vec3 H = normalize(L + V);
+    float NL = max(dot(N, L), 0.0);
+    float NV = max(dot(N, V), 0.0);
+    float NH = max(dot(N, H), 0.0);
+    vec3 sun = cc_mainLitColor.rgb * cc_mainLitColor.w;
+    vec3 sky = cc_ambientSky.rgb * cc_ambientSky.w;
+    vec3 ground = cc_ambientGround.rgb * cc_ambientSky.w;
+
+    float metal = surface.x;
+    vec3 f0 = mix(vec3(0.04), albedo, metal);
+    vec3 fresnel = f0 + (1.0 - f0) * pow(1.0 - NV, 5.0);
+    // Diffuse light from the sun and the sky/ground hemisphere; a metal keeps little of it.
+    vec3 lit = albedo * (1.0 - metal) * (sun * NL * light.x + mix(ground, sky, N.y * 0.5 + 0.5) * surface.w);
+    // What the ball mirrors: the sky above, the ground below.
+    vec3 R = reflect(-V, N);
+    lit += fresnel * mix(ground, sky, smoothstep(-0.35, 0.35, R.y)) * light.y;
+    // A white sun glint (normalised Blinn-Phong) and a coloured Fresnel rim.
+    lit += sun * (pow(NH, surface.y) * (surface.y + 8.0) * 0.0398 * NL * surface.z);
+    lit += SRGBToLinear(rimColor.rgb) * (pow(1.0 - NV, light.w) * light.z);
+    return CCFragOutput(vec4(lit, 1.0));
+  }
+}%

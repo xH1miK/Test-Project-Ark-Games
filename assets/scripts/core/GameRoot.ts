@@ -5,6 +5,7 @@ import type { GameEvents } from './Events';
 import { exposeForQa } from './QaBridge';
 import { layCarpet } from '../balls/BallCarpet';
 import { BallField } from '../balls/BallField';
+import { BallRenderer } from '../balls/BallRenderer';
 import { CameraRigModel } from '../camera/CameraRigModel';
 import { CameraRigView } from '../camera/CameraRigView';
 import { JoystickModel } from '../input/JoystickModel';
@@ -42,6 +43,9 @@ export class GameRoot extends Component {
   @property({ type: JoystickView })
   joystickView: JoystickView | null = null;
 
+  @property({ type: BallRenderer })
+  ballView: BallRenderer | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -51,9 +55,9 @@ export class GameRoot extends Component {
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
-    const { level, startSpot, tractorView, cameraView, joystickView } = this;
-    if (!level || !startSpot || !tractorView || !cameraView || !joystickView) {
-      throw new Error('GameRoot: level, startSpot, tractorView, cameraView and joystickView must be assigned');
+    const { level, startSpot, tractorView, cameraView, joystickView, ballView } = this;
+    if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView) {
+      throw new Error('GameRoot: level, startSpot, tractorView, cameraView, joystickView and ballView must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -77,6 +81,7 @@ export class GameRoot extends Component {
     joystickView.bind(this.joystick);
     tractorView.render(this.tractor);
     cameraView.render(this.camera);
+    ballView.bind(this.balls, radius, Config.balls.look, Config.balls.bounds);
 
     exposeForQa({
       config: Config,
@@ -86,6 +91,7 @@ export class GameRoot extends Component {
       input: this.moveInput,
       tractor: this.tractor,
       balls: this.balls,
+      ballView,
       camera: this.camera,
     });
   }
@@ -110,7 +116,8 @@ export class GameRoot extends Component {
     this.camera.update(step, this.tractor.x, 0, this.tractor.z);
     this.cameraView!.render(this.camera);
     this.joystickView!.render();
-    // Views have drawn this frame's moved balls (no ball view yet: the renderer comes with M4).
+    this.ballView!.render(this.balls);
+    // The ball view has redrawn this frame's moved balls.
     this.balls.clearMoved();
   }
 }
