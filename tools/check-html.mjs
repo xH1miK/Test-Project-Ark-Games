@@ -158,6 +158,11 @@ function scenarioContext(cdp, size, results) {
     /** Waits for n more engine frames. */
     frames: (n) => cdp.evaluate(`new Promise((ok) => { const d = cc.director, f = d.getTotalFrames() + ${n};
       const tick = () => d.getTotalFrames() >= f ? ok(true) : requestAnimationFrame(tick); tick(); })`),
+    /** The page's live JS heap after a full garbage collection, bytes: { usedSize, totalSize }. */
+    heap: async () => {
+      await cdp.send('HeapProfiler.collectGarbage');
+      return cdp.send('Runtime.getHeapUsage');
+    },
   };
 }
 

@@ -1,8 +1,8 @@
 // Core loop check (M6): fill the bucket, bring it to the shredder, the load flies in, coins go to the
-// purse and the HUD. Watched on every frame: every shredded ball paid exactly 2 (purse + coins still
-// in the air = 2 x shredded), the HUD shows the purse, every held ball is exactly one of carried /
-// flying / shredded, flying balls are drawn where the field has them and shredded ones are hidden.
-// Watched on every shredder step: a load is taken only while the tractor's pivot is in the square
+// purse and the HUD. Watched on every frame and shredder step (lib/loop-probe.mjs): every shredded
+// ball paid exactly 2 (purse + coins still in the air = 2 x shredded), the HUD shows the purse, every
+// held ball is exactly one of carried / flying / shredded, flying balls are drawn where the field has
+// them and shredded ones are hidden; a load is taken only while the tractor's pivot is in the square
 // zone, and all of it at once; balls the throat swallows while the tractor is still outside the zone
 // were shoved there. Legs: fill 8 -> into the zone -> coins arrive (HUD shot) -> with a full bucket
 // at the shredder from the east through the carpet (the berm feeds the throat, then the load goes) ->
@@ -14,77 +14,8 @@
 
 import { installAutopilot, runLegs } from './lib/autopilot.mjs';
 import { FPS, RELEASE_CAMERA, parkCamera } from './lib/camera.mjs';
+import { checkLoopProbe, installLoopProbe, loopState, settleCoins as settle } from './lib/loop-probe.mjs';
 import { checkUiOnTop } from './lib/ui-layers.mjs';
-
-/** Drawn centres are float32 copies of the field's doubles. */
-const SYNC_TOLERANCE = 1e-5;
-
-const PROBES = `(() => {
-  if (window.__loopProbe) return 'already';
-  const zm = window.__zm, b = zm.balls, sh = zm.shredder, tr = zm.tractor, bucket = zm.bucket, view = zm.ballView, hud = zm.coinHud;
-  const half = zm.config.shredder.zoneHalf, at = cc.find('Level/Shredder').worldPosition, pose = { x: at.x, z: at.z };
-  const perBall = zm.config.economy.coinsPerBall;
-  const p = window.__loopProbe = { frames: 0, handIns: [], outOfZone: 0, notWhole: 0, throatOutside: 0, throatInside: 0,
-    shreddedEvents: 0, earned: 0, coinsOff: 0, coinsOffAt: null, hudOff: 0, labelOff: 0, stray: 0, strayAt: null,
-    drawnOff: 0, hiddenWrong: 0, maxPunch: 1, maxRoller: 0, rollerTurned: false, maxInFlight: 0, pauseWhen: null, paused: false };
-  zm.events.on('ballsShredded', (e) => { p.shreddedEvents += e.count; });
-  zm.events.on('coinsEarned', (e) => { p.earned += e.amount; });
-  // Per shredder step: where the tractor's pivot was when a load went or the throat swallowed.
-  const step = sh.step.bind(sh);
-  sh.step = (dt) => {
-    const handed = sh.handedIn, swallowed = sh.swallowed, load = bucket.count;
-    step(dt);
-    const dx = tr.x - pose.x, dz = tr.z - pose.z, inZone = Math.abs(dx) <= half + 1e-9 && Math.abs(dz) <= half + 1e-9;
-    if (sh.handedIn > handed) {
-      p.handIns.push({ frame: p.frames, clock: window.__ap ? window.__ap.clock : 0, count: sh.handedIn - handed, load, left: bucket.count, dx: +dx.toFixed(3), dz: +dz.toFixed(3) });
-      if (!inZone) p.outOfZone++;
-      if (sh.handedIn - handed !== load || bucket.count !== 0) p.notWhole++;
-    }
-    if (sh.swallowed > swallowed) {
-      if (inZone) p.throatInside += sh.swallowed - swallowed;
-      else p.throatOutside += sh.swallowed - swallowed;
-    }
-  };
-  const roller = cc.find('Level/Shredder/SM_Shred/roll_1'), rest = roller.rotation.clone();
-  const drawn = { x: 0, y: 0, z: 0, radius: 0 };
-  // EVENT_AFTER_UPDATE comes after lateUpdate: the views have drawn this frame by then.
-  cc.director.on(cc.Director.EVENT_AFTER_UPDATE, () => {
-    p.frames++;
-    const owed = perBall * sh.shredded, have = zm.purse.total + zm.coins.pending;
-    if (owed !== have) { p.coinsOff++; if (!p.coinsOffAt) p.coinsOffAt = { frame: p.frames, owed, have }; }
-    if (hud.shown !== zm.purse.total) p.hudOff++;
-    if (hud.amount.string !== String(zm.purse.total)) p.labelOff++;
-    const carried = new Uint8Array(b.count);
-    for (let k = 0; k < bucket.count; k++) carried[bucket.index[k]] = 1;
-    for (let i = 0; i < b.count; i++) {
-      const roles = carried[i] + (sh.flights.isFlying(i) ? 1 : 0) + (b.isRemoved(i) ? 1 : 0);
-      if (b.isHeld(i) ? roles !== 1 : roles !== 0) { p.stray++; if (!p.strayAt) p.strayAt = { frame: p.frames, i, roles, held: b.isHeld(i) }; }
-    }
-    for (let k = 0; k < sh.flights.count; k++) {
-      const i = sh.flights.index[k];
-      view.data.readBall(i, drawn);
-      p.drawnOff = Math.max(p.drawnOff, Math.abs(drawn.x - b.x[i]), Math.abs(drawn.y - b.y[i]), Math.abs(drawn.z - b.z[i]));
-      if (!(drawn.radius > 0)) p.hiddenWrong++;
-    }
-    if (p.frames % 4 === 0) {
-      for (let i = 0; i < b.count; i++) {
-        if (!b.isRemoved(i)) continue;
-        view.data.readBall(i, drawn);
-        if (drawn.radius !== 0) p.hiddenWrong++;
-      }
-    }
-    p.maxInFlight = Math.max(p.maxInFlight, sh.inFlight);
-    p.maxRoller = Math.max(p.maxRoller, sh.rollerSpeed);
-    if (!p.rollerTurned && Math.abs(cc.Quat.dot(roller.rotation, rest)) < 0.999) p.rollerTurned = true;
-    p.maxPunch = Math.max(p.maxPunch, hud.punchNode.scale.x);
-    if (p.pauseWhen && p.pauseWhen()) {
-      p.pauseWhen = null;
-      p.paused = true;
-      cc.director.pause(); // logic stops, rendering goes on
-    }
-  });
-  return 'installed';
-})()`;
 
 /**
  * Where the coin counter (plate and icon) is on the page, CSS px; the part of the page the game shows
@@ -156,17 +87,10 @@ const ROUNDS = [
 export default async function coreLoop(t) {
   await t.waitFor('!!(window.__zm && window.__zm.shredder && window.__zm.coinHud && window.__zm.ballView)');
   await installAutopilot(t);
-  await t.evaluate(PROBES);
-  const probe = () => t.evaluate('__loopProbe');
-  const state = () => t.evaluate(`({ purse: __zm.purse.total, pending: __zm.coins.pending, shown: __zm.coinHud.shown, handed: __zm.shredder.handedIn,
-    swallowed: __zm.shredder.swallowed, shredded: __zm.shredder.shredded, inFlight: __zm.shredder.inFlight, bucket: __zm.bucket.count,
-    removed: __zm.balls.removedCount, held: __zm.balls.heldCount, x: __zm.tractor.x, z: __zm.tractor.z, inZone: __zm.shredder.inZone })`);
-  /** Waits until everything taken has landed and every coin has arrived. */
-  const settleCoins = async (label) => {
-    const done = await t.waitFor('__zm.shredder.inFlight === 0 && __zm.coins.pending === 0', 30000).catch(() => false);
-    t.check(done, `${label}: every ball landed and every coin arrived`);
-    return state();
-  };
+  await installLoopProbe(t);
+  const probe = () => t.evaluate('(() => { const p = __loopProbe; return { ...p, pauseWhen: null }; })()');
+  const state = () => loopState(t);
+  const settleCoins = (label) => settle(t, label);
 
   // 1. Start: empty purse, the counter shows 0; the UI layering holds with the HUD in it.
   const s0 = await state();
@@ -257,18 +181,6 @@ export default async function coreLoop(t) {
 
   // 6. Verdict over every frame and step.
   const fps = await t.evaluate(FPS(2000));
-  const p = await probe();
-  const end = await state();
-  t.log(`over ${p.frames} frames: ${p.handIns.length} hand-ins (${p.handIns.map((h) => h.count).join(', ')}), ${end.handed} + ${end.swallowed} balls shredded, ` +
-    `purse ${end.purse}; drawn off ${p.drawnOff.toExponential(1)}; max punch ${p.maxPunch.toFixed(3)}; rollers up to ${p.maxRoller.toFixed(2)} of full speed; fps ${fps.toFixed(1)}`);
-  t.check(p.outOfZone === 0, 'a load was taken only while the tractor stood in the zone');
-  t.check(p.notWhole === 0, 'every hand-in took the whole load at once');
-  t.check(p.shreddedEvents === end.shredded && p.earned === 2 * end.shredded, `events: ballsShredded ${p.shreddedEvents}, coinsEarned ${p.earned}`);
-  t.check(p.coinsOff === 0, `after every frame: purse + coins in the air = 2 x shredded ${p.coinsOffAt ? JSON.stringify(p.coinsOffAt) : ''}`);
-  t.check(p.hudOff === 0 && p.labelOff === 0, 'after every frame the HUD showed the purse');
-  t.check(p.stray === 0, `every held ball was exactly one of carried / flying / shredded ${p.strayAt ? JSON.stringify(p.strayAt) : ''}`);
-  t.check(end.held === end.bucket + end.inFlight + end.removed && end.removed === end.shredded, `held ${end.held} = ${end.bucket} carried + ${end.inFlight} flying + ${end.removed} shredded`);
-  t.check(p.drawnOff < SYNC_TOLERANCE && p.hiddenWrong === 0, `flying balls drawn where the field has them (worst ${p.drawnOff.toExponential(1)}), shredded ones hidden`);
-  t.check(p.maxPunch > 1.1, `the counter swelled when coins arrived (max scale ${p.maxPunch.toFixed(3)})`);
-  t.check(p.maxRoller === 1 && p.rollerTurned, 'the rollers spun up to full speed while grinding');
+  await checkLoopProbe(t, await state());
+  t.log(`fps ${fps.toFixed(1)}`);
 }
