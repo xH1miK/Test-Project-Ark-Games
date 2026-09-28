@@ -41,10 +41,18 @@ CCProgram ball-vs %{
   in vec4 a_spin;   // orientation quaternion (normalised int16)
   in vec4 a_corner; // xy: quad corner 0/1, z: shade (0..1 -> 0.5..1.5)
 
+  // The fragment shader works in view space; what is the same for a whole ball is computed here.
   out vec3 v_ray;    // the quad point in view space: the eye looks along it
   out vec4 v_sphere; // centre (view space), radius
-  out vec4 v_spin;
-  out float v_shade;
+  out vec4 v_light;  // xyz: direction to the sun (view space), w: shade
+  out vec3 v_axisX;  // the ball's own X and Y axes in view space: the pattern turns with them
+  out vec3 v_axisY;
+
+  // v turned by the unit quaternion q.
+  vec3 turn (vec4 q, vec3 v) {
+    vec3 t = 2.0 * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
+  }
 
   vec4 vert () {
     vec3 centre = (cc_matView * vec4(a_ball.xyz, 1.0)).xyz;
@@ -61,8 +69,10 @@ CCProgram ball-vs %{
 
     v_ray = p;
     v_sphere = vec4(centre, r);
-    v_spin = normalize(a_spin);
-    v_shade = 0.5 + a_corner.z;
+    vec4 spin = normalize(a_spin);
+    v_axisX = (cc_matView * vec4(turn(spin, vec3(1.0, 0.0, 0.0)), 0.0)).xyz;
+    v_axisY = (cc_matView * vec4(turn(spin, vec3(0.0, 1.0, 0.0)), 0.0)).xyz;
+    v_light = vec4(normalize((cc_matView * vec4(-cc_mainLitDir.xyz, 0.0)).xyz), 0.5 + a_corner.z);
     return cc_matProj * vec4(p, 1.0);
   }
 }%
@@ -76,8 +86,9 @@ CCProgram ball-fs %{
 
   in vec3 v_ray;
   in vec4 v_sphere;
-  in vec4 v_spin;
-  in float v_shade;
+  in vec4 v_light;
+  in vec3 v_axisX;
+  in vec3 v_axisY;
 
   uniform BallLook {
     vec4 mainColor;
@@ -89,13 +100,6 @@ CCProgram ball-fs %{
     vec4 rim;     // x: strength, y: power
     vec4 pattern; // x: band half width, y: band shade, z: spot size (cosine), w: spot shade
   };
-
-  // v turned by the inverse of the unit quaternion q: world axes -> the ball's own axes.
-  vec3 unspin (vec4 q, vec3 v) {
-    vec3 u = -q.xyz;
-    vec3 t = 2.0 * cross(u, v);
-    return v + q.w * t + cross(u, t);
-  }
 
   void writeDepth (float depth) {
     #if __VERSION__ < 300
@@ -117,20 +121,25 @@ CCProgram ball-fs %{
     float gap2 = r * r - dot(miss, miss);
     if (gap2 <= 0.0) discard;
     vec3 hit = dir * (along - sqrt(gap2));
-    vec4 clip = cc_matProj * vec4(hit, 1.0);
-    // NDC z -> window depth; cc_nearFar.z is the clip-space min z (-1 in GL, 0 elsewhere).
-    writeDepth((clip.z / clip.w - cc_nearFar.z) / (1.0 - cc_nearFar.z));
+    // Clip z and w need only the z and w rows of the projection; then NDC z -> window depth
+    // (cc_nearFar.z is the clip-space min z: -1 in GL, 0 elsewhere).
+    float clipZ = cc_matProj[2][2] * hit.z + cc_matProj[3][2];
+    float clipW = cc_matProj[2][3] * hit.z + cc_matProj[3][3];
+    writeDepth((clipZ / clipW - cc_nearFar.z) / (1.0 - cc_nearFar.z));
 
-    vec3 N = normalize((cc_matViewInv * vec4(hit - centre, 0.0)).xyz);
-    vec3 V = normalize((cc_matViewInv * vec4(-dir, 0.0)).xyz);
+    // Shading in view space: no matrix per pixel. World up seen from the camera is the view
+    // matrix's second column.
+    vec3 N = (hit - centre) / r;
+    vec3 V = -dir;
+    vec3 up = cc_matView[1].xyz;
+    float upN = dot(N, up);
 
     // The pattern lives on the ball: a band round it and a spot on each pole off the band.
-    vec3 own = unspin(v_spin, N);
-    float band = 1.0 - smoothstep(pattern.x - 0.05, pattern.x + 0.05, abs(own.y));
-    float spot = smoothstep(pattern.z - 0.02, pattern.z + 0.02, abs(own.x));
-    vec3 albedo = SRGBToLinear(mainColor.rgb) * v_shade * mix(1.0, pattern.y, band) * mix(1.0, pattern.w, spot);
+    float band = 1.0 - smoothstep(pattern.x - 0.05, pattern.x + 0.05, abs(dot(N, v_axisY)));
+    float spot = smoothstep(pattern.z - 0.02, pattern.z + 0.02, abs(dot(N, v_axisX)));
+    vec3 albedo = SRGBToLinear(mainColor.rgb) * v_light.w * mix(1.0, pattern.y, band) * mix(1.0, pattern.w, spot);
 
-    vec3 L = normalize(-cc_mainLitDir.xyz);
+    vec3 L = v_light.xyz;
     vec3 H = normalize(L + V);
     float NL = max(dot(N, L), 0.0);
     float NV = max(dot(N, V), 0.0);
@@ -145,14 +154,14 @@ CCProgram ball-fs %{
     // Schlick's Fresnel; a rough surface brightens less at grazing angles.
     vec3 fresnel = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - NV, 5.0);
     // The floor hides the sky from the lower half of a ball resting on it.
-    float open = 1.0 - shine.w * (1.0 - smoothstep(-0.6, 0.6, N.y));
+    float open = 1.0 - shine.w * (1.0 - smoothstep(-0.6, 0.6, upN));
     // Diffuse light from the sun and the sky/ground hemisphere; a metal keeps little of it.
-    vec3 lit = albedo * (1.0 - metal) * (sun * NL * surface.w + mix(ground, sky, N.y * 0.5 + 0.5) * (surface.z * open));
+    vec3 lit = albedo * (1.0 - metal) * (sun * NL * surface.w + mix(ground, sky, upN * 0.5 + 0.5) * (surface.z * open));
     // What the ball mirrors: a bright sky above, a dark ground below (its own colours, so the metal
     // look does not depend on the scene's ambient tint). A rough ball mirrors along its normal
     // rather than the reflected ray: a soft top-to-bottom gradient instead of a horizon line.
     vec3 R = normalize(mix(reflect(-V, N), N, rough));
-    vec3 mirrored = mix(SRGBToLinear(mirrorGround.rgb), SRGBToLinear(mirrorSky.rgb), R.y * 0.5 + 0.5);
+    vec3 mirrored = mix(SRGBToLinear(mirrorGround.rgb), SRGBToLinear(mirrorSky.rgb), dot(R, up) * 0.5 + 0.5);
     lit += fresnel * mirrored * (shine.x * open);
     // A white sun glint (normalised Blinn-Phong) and a coloured Fresnel rim.
     lit += sun * (pow(NH, shine.y) * (shine.y + 8.0) * 0.0398 * NL * shine.z);
