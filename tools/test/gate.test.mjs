@@ -50,7 +50,7 @@ test('joystick: switched off, the finger is let go, new touches do nothing and t
   assert.deepEqual([stick.stick.x, stick.stick.y], [0, 0], 'a new touch is ignored');
   assert.equal(stick.isHeld, false);
   for (let f = 0; f < 60; f++) stick.update(1 / 60);
-  assert.ok(stick.visibility < 0.01, `faded away within a second (${stick.visibility})`);
+  assert.equal(stick.visibility, 0, 'faded away within a second, and exactly to zero');
 });
 
 test('gate: closed until told, opens over openTime (60 fps or 4 fps alike), announces the start and the end once', () => {

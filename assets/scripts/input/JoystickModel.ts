@@ -118,7 +118,7 @@ export class JoystickModel {
     if (this.held) return;
     // Exponential approach: about 95% of the way after returnTime.
     const k = 1 - Math.exp((-3 * dt) / Math.max(this.settings.returnTime, 1e-6));
-    if (!this.enabled) this.visibility -= this.visibility * k;
+    if (!this.enabled) this.visibility = this.visibility < 0.004 ? 0 : this.visibility - this.visibility * k;
     this.base.x += (this.rest.x - this.base.x) * k;
     this.base.y += (this.rest.y - this.base.y) * k;
     this.knob.x -= this.knob.x * k;
