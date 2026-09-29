@@ -22,6 +22,9 @@ import { MoveInput } from '../input/MoveInput';
 import { Bucket } from '../tractor/Bucket';
 import { TractorModel } from '../tractor/TractorModel';
 import { TractorView } from '../tractor/TractorView';
+import { TutorialFlow } from '../tutorial/TutorialFlow';
+import { TutorialMarkers } from '../tutorial/TutorialMarkers';
+import { TutorialView } from '../tutorial/TutorialView';
 import { CoinHud } from '../ui/CoinHud';
 import { FinaleView } from '../ui/FinaleView';
 import { Gate } from '../world/Gate';
@@ -87,6 +90,9 @@ export class GameRoot extends Component {
   @property({ type: FinaleView, tooltip: 'The title and the confetti of the end (under Canvas/Hud).' })
   finaleView: FinaleView | null = null;
 
+  @property({ type: TutorialView, tooltip: 'On an empty node at the origin: draws the tutorial arrow and pointer.' })
+  tutorialView: TutorialView | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -99,14 +105,16 @@ export class GameRoot extends Component {
   private coins!: CoinFlights;
   private progression!: Progression;
   private gate!: Gate;
+  private tutorial!: TutorialFlow;
+  private markers!: TutorialMarkers;
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
     const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
-      gateView, finaleView } = this;
+      gateView, finaleView, tutorialView } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -155,6 +163,11 @@ export class GameRoot extends Component {
       { ground: this.balls, machine: this.tractor, controls, gate: this.gate }, this.events);
     this.events.on('gateOpening', () => finaleView.play());
 
+    // The tutorial (no intro to wait for: it starts with the run) reads the pads, the purse, the tier and the gate.
+    this.tutorial = new TutorialFlow({ purse: this.purse, shredder: pose, upgradePad, gatePad, machine: this.tractor, gate: this.gate });
+    this.markers = new TutorialMarkers(Config.tutorial);
+    this.tutorial.begin();
+
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
     this.events.on('tierChanged', ({ tier }) =>
@@ -186,6 +199,9 @@ export class GameRoot extends Component {
       gate: this.gate,
       gateView,
       finaleView,
+      tutorial: this.tutorial,
+      markers: this.markers,
+      tutorialView,
       ballView,
       coinHud,
       tractorView,
@@ -215,6 +231,8 @@ export class GameRoot extends Component {
     this.gate.step(frame);
     // Pads take from the purse after this frame's coins have arrived in it.
     this.progression.step(frame);
+    // The tutorial last: it reads what this frame's payments did (a gate paid now is Done now).
+    this.tutorial.update();
   }
 
   protected lateUpdate(dt: number): void {
@@ -222,6 +240,8 @@ export class GameRoot extends Component {
     this.tractorView!.render(this.tractor);
     this.camera.update(step, this.tractor.x, 0, this.tractor.z);
     this.cameraView!.render(this.camera);
+    this.markers.update(step, this.tractor.x, this.tractor.z, this.tutorial.target);
+    this.tutorialView!.render(this.markers);
     this.joystickView!.render();
     this.ballView!.render(this.balls, this.bucket);
     this.shredderView!.render(this.shredder);

@@ -315,6 +315,21 @@ export const Config = {
   },
 
   /**
+   * The tutorial's markers (numbers from the example): the path arrow floats `forward` units ahead of
+   * the tractor's pivot (along its own heading) `height` above the ground and swings round at
+   * `turnSpeed` degrees/s; the pointer bobs by `bob` units (amplitude) every `period` s, its rest
+   * position `shredderHeight` over the shredder and `padHeight` over a pad. `look`: both markers are
+   * one lit arrow mesh built in code (shaft + cone, tail at the marker's position, tip forward) in
+   * this colour (RGB); the path arrow lies flat, the pointer is tipped `pointerPitch` degrees nose down
+   * and turned to face the camera's yaw, so it leans over towards the viewer.
+   */
+  tutorial: {
+    arrow: { forward: 3.2, height: 1.5, turnSpeed: 540 },
+    pointer: { bob: 0.15, period: 1.1, shredderHeight: 3, padHeight: 2.5 },
+    look: { color: [60, 255, 80], arrowScale: 1.4, pointerScale: 1.54, pointerPitch: 60 },
+  },
+
+  /**
    * Coins on their way to the purse (the purse is credited when a coin arrives): a payout flies as up
    * to `spritesPerPayout` coins sharing its amount, each `flightTime` ± jitter seconds; with
    * `maxAlive` coins already in the air a payout is credited at once.
