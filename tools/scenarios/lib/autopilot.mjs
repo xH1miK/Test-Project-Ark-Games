@@ -17,7 +17,7 @@ export const AUTOPILOT = `(() => {
   if (window.__ap) return 'already';
   const zm = window.__zm;
   const ap = window.__ap = { legs: [], i: 0, t: 0, clock: 0, running: false, results: [], legWorst: 0, targets: {},
-    // `full` is against the tractor's tier: the bucket follows a new tier on its next step.
+    // 'full' is against the tractor's tier: the bucket follows a new tier on its next step.
     until: { full: () => zm.bucket.count >= zm.tractor.bucketCapacity, inZone: () => zm.shredder.inZone } };
   /** Asks a seek leg's source for its next point; false when there is none. */
   const aim = (leg, stalled) => {

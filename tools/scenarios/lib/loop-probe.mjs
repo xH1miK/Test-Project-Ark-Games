@@ -113,14 +113,16 @@ export async function settleCoins(t, label) {
 
 /**
  * The verdict over every frame and step so far (`end` = loopState once the coins have settled).
- * Logs the hand-in sizes (up to `listed` of them) and returns the probe.
+ * Logs the hand-in sizes (up to `listed` of them) and returns the probe. `ended`: the scenario played
+ * the run to its end (M12), so the gate must be open and the controls off, not shut and on.
  */
-export async function checkLoopProbe(t, end, listed = 40) {
+export async function checkLoopProbe(t, end, listed = 40, { ended = false } = {}) {
   const p = await t.evaluate(`(() => { const p = __loopProbe; return { ...p, handIns: p.handIns.slice(0, ${listed}).map((h) => h.count), pauseWhen: null }; })()`);
   t.log(`over ${p.frames} frames: ${p.handInCount} hand-ins (${p.handIns.join(', ')}${p.handInCount > p.handIns.length ? ', ...' : ''}), ` +
     `${end.handed} + ${end.swallowed} balls shredded, purse ${end.purse}; drawn off ${p.drawnOff.toExponential(1)}; max punch ${p.maxPunch.toFixed(3)}; rollers up to ${p.maxRoller.toFixed(2)} of full speed`);
   // Paying the gate ends the run (M10): a scenario's routes must keep out of the gate pad's zone once the purse can pay.
-  t.check(end.gate === 'closed' && !end.locked, 'the run was not ended: the gate stayed shut and the controls on');
+  if (ended) t.check(end.gate === 'open' && end.locked, 'the run ended: the gate is open and the controls are off');
+  else t.check(end.gate === 'closed' && !end.locked, 'the run was not ended: the gate stayed shut and the controls on');
   t.check(p.outOfZone === 0, 'a load was taken only while the tractor stood in the zone');
   t.check(p.notWhole === 0, 'every hand-in took the whole load at once');
   t.check(p.shreddedEvents === end.shredded && p.earned === 2 * end.shredded, `events: ballsShredded ${p.shreddedEvents}, coinsEarned ${p.earned}`);
