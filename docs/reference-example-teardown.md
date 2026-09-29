@@ -93,6 +93,23 @@ Open 0.85 s: hold 15%, then sheet/rim scale Y 1→0 while rising + fading, spark
 | Upgrade | 0.65 | — | tier-up |
 | Purchase | 0.65 | — | gate bought |
 
+Also in the example's `SoundTable` (found in S1, 29.09): **`GateOpen`** (`gate_whoosh`) volume 0.55, min interval 1 s — played by `Gate.open()`, i.e. at the same moment as `Purchase` when the gate is bought (so the finale = purchase + whoosh; the table above missed it). `Win` (`win_sound`) 0.25 belongs to the packshot (out of scope); `Button` (`common_button`) 0.7 is the CTA's; the mute button is silent. The music plays from the first gesture (`Sfx.playMusic(Theme)`); engine and grind are `setLoop(id, on)` (grind also `setLoopGain` by roller speed).
+
+Measured on the example's clips (S1; audio pulled out of `reference/example` by `tools/audio/extract-reference.mjs` for measuring only, never shipped; `tools/audio/analyze.mjs`, Chrome's decoder, mono mix; file names are UUIDs, so the role is inferred from length, level and spectrum):
+
+| Role | Length | Peak / RMS (dBFS) | Centroid, bands <150 / <600 / <2.5k / <8k | Notes |
+|---|---|---|---|---|
+| Theme | 80.8 s | 0.0 / −12.6 | 284 Hz; 28 / 69 / 4 / 0 % | flat level, fades at both ends (0.6 s in, 1.7 s out) |
+| Engine loop | 2.7 s | 0.0 / −7.5 | 184 Hz; 88 / 5 / 7 / 0 | near full scale, no silence at the ends (gapless) |
+| Grind loop | 4.2 s | −7.4 / −22.4 | 995 Hz; 17 / 51 / 19 / 14 | steady, crunchy (crest 15 dB) |
+| Ball click ×5 | 0.06–0.11 s | −10 / −25 | 780–1250 Hz; 97% in 0.6–2.5k | tonal "tok", fast decay |
+| Coin ×5 | 0.2–0.3 s | −12 / −35 | 2350–2940 Hz; 24–46% in 0.6–2.5k, 53–75% in 2.5–8k | metallic clink |
+| Upgrade | 0.6 s | −3 / −22 | 467 Hz; 14 / 68 / 18 | swells for ~0.25 s, then decays |
+| Purchase | 0.7 s | −12 / −24 | 480 Hz; 0 / 91 / 9 | strikes at once, decays |
+| Gate whoosh | 2.3–2.6 s | 0 / −20 | 330–970 Hz | swell peaking mid-clip |
+
+Effective level at the table's gains (RMS + 20·log10 gain): music −32, engine −35, grind −35 (at full roller speed) — the three loops sit together near −35 dBFS; the events (upgrade, gate) are the loud ones (peak −7 dBFS). Our clips are calibrated to these file levels, so the same gains make the same mix.
+
 Sfx engine: unlock on first DOM gesture; retry music/loops every 0.5 s until unlocked; pool ≤24 voices; ≤4 one-shots/frame;
 per-id min/max interval; never repeat last variant; mute stops all and remembers loops. Cocos AudioSource has no pitch → use variants.
 Mute button: 100×100 bottom-left, icon drawn with Graphics.
