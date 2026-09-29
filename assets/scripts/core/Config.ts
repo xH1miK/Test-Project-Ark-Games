@@ -364,6 +364,12 @@ export const Config = {
     landscapeHeight: 1400,
     /** The coin counter swells to `punchScale` and back over `punchTime` seconds when coins arrive. */
     coinHud: { punchScale: 1.16, punchTime: 0.14 },
+    /**
+     * The mute button (bottom-left, in the Hud group): the icon is 100 units, the touch area round it `touch` (a finger
+     * is bigger than 100 units of a 1280-wide frame: ~30 CSS px on a phone, 49 with the area), `margin` from the corner.
+     * Pressed, the icon shrinks to `pressScale` in `pressTime` s and springs back over `releaseTime`.
+     */
+    muteButton: { icon: 100, touch: 160, margin: 20, pressScale: 0.86, pressTime: 0.06, releaseTime: 0.2 },
   },
 
   /**

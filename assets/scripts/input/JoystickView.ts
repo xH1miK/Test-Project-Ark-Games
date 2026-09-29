@@ -5,6 +5,7 @@ import type { JoystickModel } from './JoystickModel';
 const { ccclass, property } = _decorator;
 
 const tmpUi = new Vec2();
+const tmpScreen = new Vec2();
 const tmpLocal = new Vec3();
 
 /**
@@ -12,6 +13,9 @@ const tmpLocal = new Vec3();
  * base and the knob from the model. Put it on a UI node stretched over the canvas (Widget), with the
  * ring as a child and the knob as the ring's child (Unity analogy: an on-screen stick whose touch
  * area is a full-screen raycast target). The first finger owns the stick; others are ignored.
+ * It sits above the Hud in draw order (the UI-on-top rule), so it would swallow the touches of the Hud's buttons: a
+ * touch that starts inside one of `passThrough` is left alone (the engine's `preventSwallow`: the event goes on to
+ * the node below), whatever the stick is doing, and the rest of that finger's touch is left alone too.
  */
 @ccclass('JoystickView')
 export class JoystickView extends Component {
@@ -21,10 +25,15 @@ export class JoystickView extends Component {
   @property({ type: Node, tooltip: 'Knob sprite, a child of the ring.' })
   knob: Node | null = null;
 
+  @property({ type: [Node], tooltip: "UI nodes below this one (the Hud's buttons) whose touches the stick leaves to them." })
+  passThrough: Node[] = [];
+
   private model: JoystickModel | null = null;
   private area: UITransform | null = null;
   private fade: UIOpacity | null = null;
   private touchId: number | null = null;
+  /** The finger that started on a pass-through node: none of its events are ours. */
+  private leftAlone: number | null = null;
 
   /** Called once by GameRoot. */
   bind(model: JoystickModel): void {
@@ -77,6 +86,11 @@ export class JoystickView extends Component {
   }
 
   private onTouchStart(event: EventTouch): void {
+    if (this.overPassThrough(event)) {
+      this.leftAlone = event.getID();
+      event.preventSwallow = true;
+      return;
+    }
     if (!this.model || this.touchId !== null) return;
     this.touchId = event.getID();
     const p = this.toArea(event);
@@ -84,15 +98,32 @@ export class JoystickView extends Component {
   }
 
   private onTouchMove(event: EventTouch): void {
+    if (event.getID() === this.leftAlone) {
+      event.preventSwallow = true;
+      return;
+    }
     if (!this.model || event.getID() !== this.touchId) return;
     const p = this.toArea(event);
     this.model.drag(p.x, p.y);
   }
 
   private onTouchEnd(event: EventTouch): void {
+    if (event.getID() === this.leftAlone) {
+      event.preventSwallow = true;
+      this.leftAlone = null;
+      return;
+    }
     if (!this.model || event.getID() !== this.touchId) return;
     this.touchId = null;
     this.model.release();
+  }
+
+  private overPassThrough(event: EventTouch): boolean {
+    event.getLocation(tmpScreen);
+    for (const node of this.passThrough) {
+      if (node?.activeInHierarchy && node.getComponent(UITransform)?.hitTest(tmpScreen, event.windowId)) return true;
+    }
+    return false;
   }
 
   /** Touch point in this node's space (origin at its anchor, which is the centre). */

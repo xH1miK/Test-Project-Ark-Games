@@ -33,6 +33,7 @@ import { TutorialView } from '../tutorial/TutorialView';
 import { CoinFlightView } from '../ui/CoinFlightView';
 import { CoinHud } from '../ui/CoinHud';
 import { FinaleView } from '../ui/FinaleView';
+import { MuteButton } from '../ui/MuteButton';
 import { Gate } from '../world/Gate';
 import { GateView } from '../world/GateView';
 import type { ObstacleGrid } from '../world/ObstacleGrid';
@@ -108,6 +109,9 @@ export class GameRoot extends Component {
   @property({ type: SoundView, tooltip: 'Plays the sounds (holds the clips of assets/audio).' })
   soundView: SoundView | null = null;
 
+  @property({ type: MuteButton, tooltip: 'The mute button, bottom-left under Canvas/Hud.' })
+  muteButton: MuteButton | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -131,10 +135,10 @@ export class GameRoot extends Component {
 
   protected onLoad(): void {
     const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
-      gateView, finaleView, tutorialView, coinFlightView, puffRenderer, soundView } = this;
+      gateView, finaleView, tutorialView, coinFlightView, puffRenderer, soundView, muteButton } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer || !soundView) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs, sound) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer || !soundView || !muteButton) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs, sound, mute button) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -209,6 +213,7 @@ export class GameRoot extends Component {
     this.soundPresenter = new SoundPresenter(this.events, this.sound, { tractor: this.tractor, shredder: this.shredder },
       { engineMinSpeed: Config.sound.engineMinSpeed, prices: { upgrade: upgradePrice, gate: gatePrice } });
     this.soundPresenter.start();
+    muteButton.bind(() => this.sound.toggleMute());
 
     this.camera = new CameraRigModel(Config.camera);
     this.camera.setAspect(screen.windowSize.width / screen.windowSize.height);
@@ -258,6 +263,7 @@ export class GameRoot extends Component {
       puffRenderer,
       sound: this.sound,
       soundView,
+      muteButton,
       tractorView,
       camera: this.camera,
     });
@@ -304,6 +310,7 @@ export class GameRoot extends Component {
     this.markers.update(step, this.tractor.x, this.tractor.z, this.tutorial.target);
     this.tutorialView!.render(this.markers);
     this.joystickView!.render();
+    this.muteButton!.render(this.sound.muted);
     this.ballView!.render(this.balls, this.bucket);
     this.shredderView!.render(this.shredder);
     this.renderPads();
