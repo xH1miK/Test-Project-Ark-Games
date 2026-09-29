@@ -166,6 +166,12 @@ export const Config = {
     /** Zoom-out factor per tier above 1, and how long the zoom takes, s. */
     tierZoom: 1.2,
     zoomTime: 0.5,
+    /** Framing by screen shape (see CameraRigSettings): a 9:16 phone is the design frame (ref 0.5625). */
+    aspect: { ref: 0.5625, power: 0.5, min: 0.75, max: 1.15 },
+    /** The upgrade pad popping up: the camera leans toward it and pulls out a little, then comes back. */
+    peekPad: { share: 0.55, zoom: 1.15, inTime: 0.35, holdTime: 0.7, outTime: 0.6 },
+    /** The gate opening: the camera pulls out toward the gate and stays (the run is over). */
+    peekGate: { share: 0.65, zoom: 1.3, inTime: 0.9, holdTime: Infinity, outTime: 1 },
   },
 
   joystick: {
