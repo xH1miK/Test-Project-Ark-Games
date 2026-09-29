@@ -59,7 +59,7 @@ export default async function cameraFrame(t) {
     cc.director.on(cc.Director.EVENT_AFTER_UPDATE, () => {
       const q = window.__cam; q.frames++;
       if (pad.shown && q.shownAt < 0) { q.shownAt = q.frames; q.start = { x: c.focus.x, z: c.focus.z }; }
-      if (c.peekWeight > q.peak) { q.peak = c.peekWeight; if (c.peekWeight > 0.999 && !q.atPeak) q.atPeak = { boost: c.boost, tx: __zm.tractor.x, tz: __zm.tractor.z, fx: c.focus.x, fz: c.focus.z, frame: q.frames }; }
+      if (c.peekWeight > q.peak) { q.peak = c.peekWeight; if (c.peekWeight === 1 && !q.atPeak) q.atPeak = { boost: c.boost, tx: __zm.tractor.x, tz: __zm.tractor.z, fx: c.focus.x, fz: c.focus.z, frame: q.frames }; }
     }); })()`);
   await t.evaluate(`__ap.run(${JSON.stringify(FILL_AND_SELL)})`);
   await t.waitFor('__cam.atPeak !== null', 60000);

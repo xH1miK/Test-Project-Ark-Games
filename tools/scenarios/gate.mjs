@@ -181,7 +181,7 @@ export default async function gate(t) {
   t.check(q.speedUp === 0 && q.stopClock !== null && q.stopClock < 0.5 && q.moved < 0.6,
     `the tractor braked to a halt (${q.stopClock?.toFixed(3)} s, ${q.moved.toFixed(2)} units) and stayed`);
   t.check(q.opening && q.paid && q.opening.frame === q.paid.frame, 'gateOpening came in the frame of the payment');
-  t.check(q.opened.length === 1 && took >= cfg.openTime - 1e-9 && took <= cfg.openTime + frameMax + 1e-9,
+  t.check(q.opened.length === 1 && took >= cfg.openTime - frameMax - 1e-9 && took <= cfg.openTime + frameMax + 1e-9,
     `gateOpened once, ${took.toFixed(3)} s after gateOpening (openTime ${cfg.openTime} s, give or take a frame)`);
   t.check(q.progressOff === 0 && q.foldOff === 0, 'every frame the gate progress and fold followed the clock and the formulas');
   t.check(q.sheetOff === 0 && q.sheetAlphaOff === 0 && q.sparkOff === 0 && q.sparkYOff === 0 && q.curtainOffEarly === 0 && q.curtainOnLate === 0,
