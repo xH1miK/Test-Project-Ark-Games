@@ -10,8 +10,9 @@
  * Loops (`setLoop` on/off, `setLoopLevel` 0..1): the volume follows `base x gain`, the gain ramps to its
  * target over `fade` seconds, a loop is only really started when it can be heard; mute stops every loop
  * and remembers which ones are wanted, so unmuting brings back exactly those.
- * Unlock: the DOM gesture handler calls `gesture()` synchronously (browsers only accept the resume inside the
- * handler); until a loop is really sounding the start is retried every `unlockRetry` seconds after a gesture.
+ * Unlock: a loop is asked to start as soon as it is wanted (where the browser allows autoplay that is all it takes);
+ * until one really sounds the ask is repeated every `unlockRetry` seconds, and the DOM gesture handler calls
+ * `gesture()` synchronously, which asks at once (browsers only accept the resume inside the handler).
  */
 
 export type LoopId = 'music' | 'engine' | 'grind';
@@ -84,6 +85,8 @@ export class AudioManager {
   /** Some loop has really started sounding: the browser let the page make sound. */
   unlocked = false;
   muted = false;
+  /** Real user gestures reported so far. */
+  gestures = 0;
   /** Game time and frame count, from `update`. */
   now = 0;
   frame = 0;
@@ -101,7 +104,6 @@ export class AudioManager {
   /** End times of the one-shots that may still be sounding. */
   private voices: number[] = [];
   private shotsThisFrame = 0;
-  private gestureSeen = false;
   private retryClock = 0;
 
   constructor(settings: SoundSettings, backend: SoundBackend, random: () => number) {
@@ -159,7 +161,7 @@ export class AudioManager {
    * browser accepts the start of sound (and, on some, the resume of the audio context).
    */
   gesture(): void {
-    this.gestureSeen = true;
+    this.gestures++;
     this.retryClock = 0;
     if (this.unlocked || this.muted) return;
     for (const id of LOOP_IDS) if (this.shouldRun(id)) this.startLoop(id);
@@ -183,8 +185,8 @@ export class AudioManager {
       }
       if (!this.shouldRun(id)) {
         if (loop.started) this.stopLoop(id);
-      } else if (!loop.started && this.unlocked) {
-        this.startLoop(id);
+      } else if (!loop.started) {
+        this.startLoop(id); // before the unlock this is the first ask: the browser keeps it waiting
       }
       if (loop.started) {
         const volume = s.volume * loop.gain;
@@ -200,12 +202,12 @@ export class AudioManager {
         if (this.loops[id].started && this.backend.loopSounding(id)) this.unlocked = true;
       }
     }
-    // After a gesture that did not get the sound going, ask again now and then.
-    if (this.gestureSeen && !this.unlocked && !this.muted) {
+    // Until the sound really goes, ask again now and then.
+    if (!this.unlocked && !this.muted) {
       this.retryClock += dt;
       if (this.retryClock >= this.settings.unlockRetry) {
         this.retryClock = 0;
-        for (const id of LOOP_IDS) if (this.shouldRun(id)) this.startLoop(id);
+        for (const id of LOOP_IDS) if (this.loops[id].started && this.shouldRun(id)) this.startLoop(id);
       }
     }
   }

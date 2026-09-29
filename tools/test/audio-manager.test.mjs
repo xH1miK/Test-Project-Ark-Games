@@ -61,22 +61,35 @@ const unlocked = (settings) => {
 };
 const tick = (sound, seconds, dt = 0.016) => { for (let t = 0; t < seconds - 1e-9; t += dt) sound.update(dt); };
 
-test('locked: nothing starts before a real gesture, and one-shots are dropped (not queued)', () => {
+test('locked: the loops are asked to start at once (the browser keeps them waiting) and one-shots are dropped, not queued', () => {
   const { backend, sound } = make();
   sound.setLoop('music', true);
-  tick(sound, 1);
-  assert.equal(backend.count('start'), 0, 'no loop is started while the page is locked');
+  sound.update(0.016);
+  assert.equal(backend.count('start', 'music'), 1, 'the first ask, with no gesture');
+  tick(sound, 0.3);
+  assert.equal(sound.unlocked, false, 'the context is suspended: nothing sounds yet');
   assert.equal(sound.play('ball'), false);
   assert.equal(sound.dropped.locked, 1);
-  assert.equal(backend.count('shot'), 0);
+  assert.equal(backend.count('shot'), 0, 'nothing is handed to the audio context to be queued');
 });
 
-test('a gesture starts the wanted loops at once; the sound counts as unlocked only when a loop really sounds', () => {
+test('where the browser allows autoplay the music sounds without any gesture', () => {
+  const { backend, sound } = make();
+  backend.unlock();
+  sound.setLoop('music', true);
+  sound.update(0.016);
+  sound.update(0.016);
+  assert.equal(sound.unlocked, true);
+  assert.equal(sound.play('ball'), true);
+});
+
+test('a gesture asks again at once, inside the handler; the sound counts as unlocked only when a loop really sounds', () => {
   const { backend, sound } = make();
   sound.setLoop('music', true);
-  tick(sound, 1);
+  tick(sound, 0.3);
+  const before = backend.count('start', 'music');
   sound.gesture();
-  assert.equal(backend.count('start', 'music'), 1, 'started synchronously inside the gesture');
+  assert.equal(backend.count('start', 'music'), before + 1, 'asked synchronously inside the gesture');
   sound.update(0.016);
   assert.equal(sound.unlocked, false, 'the context is still suspended');
   assert.equal(sound.play('ball'), false);
@@ -86,15 +99,12 @@ test('a gesture starts the wanted loops at once; the sound counts as unlocked on
   assert.equal(sound.play('ball'), true);
 });
 
-test('after a gesture that did not unlock, the start is asked again every 0.5 s until it works', () => {
+test('until the sound goes, the ask is repeated every 0.5 s; once it sounds the retries stop', () => {
   const { backend, sound } = make();
   sound.setLoop('music', true);
-  tick(sound, 1);
-  sound.gesture();
-  assert.equal(backend.count('start', 'music'), 1);
   tick(sound, 2.05);
-  const retries = backend.count('start', 'music') - 1;
-  assert.ok(retries >= 3 && retries <= 4, `${retries} retries in 2 s`);
+  const asks = backend.count('start', 'music');
+  assert.ok(asks >= 4 && asks <= 5, `${asks} asks in 2 s (the first plus one per 0.5 s)`);
   backend.unlock();
   sound.update(0.016);
   const before = backend.count('start', 'music');
@@ -102,11 +112,15 @@ test('after a gesture that did not unlock, the start is asked again every 0.5 s 
   assert.equal(backend.count('start', 'music'), before, 'no retries once unlocked');
 });
 
-test('a sound with no gesture at all never retries (nothing to retry yet)', () => {
+test('a loop that is switched off while still locked is cancelled, not left waiting', () => {
   const { backend, sound } = make();
-  sound.setLoop('music', true);
-  tick(sound, 3);
-  assert.equal(backend.count('start'), 0);
+  sound.setLoop('engine', true);
+  tick(sound, 0.4);
+  assert.equal(sound.loopRunning('engine'), true);
+  sound.setLoop('engine', false);
+  tick(sound, 0.4);
+  assert.equal(sound.loopRunning('engine'), false);
+  assert.equal(backend.count('stop', 'engine'), 1);
 });
 
 test('throttle: after a play the next is allowed min..max seconds later (ball 55-125 ms)', () => {
@@ -263,14 +277,15 @@ test('the grind is as loud as its level: base x level, and it stops when the rol
   assert.ok(Math.abs(backend.volumes.grind - 0.22) < 1e-9, 'a level above 1 counts as 1');
 });
 
-test('music starts at full level after the unlock (its fade ran while it waited)', () => {
+test('the music fades in while it waits for the unlock: when the sound goes it is already at full level', () => {
   const { backend, sound } = make();
   sound.setLoop('music', true);
   tick(sound, 1);
-  sound.gesture();
-  const start = backend.calls.find((c) => c[0] === 'start');
-  assert.equal(start[2], 'music');
-  assert.ok(Math.abs(start[3] - Config.sound.loops.music.volume) < 1e-9);
+  assert.ok(Math.abs(backend.volumes.music - Config.sound.loops.music.volume) < 1e-9, 'the waiting loop already has its full volume');
+  backend.unlock();
+  sound.update(0.016);
+  assert.equal(sound.unlocked, true);
+  assert.ok(Math.abs(backend.volumes.music - Config.sound.loops.music.volume) < 1e-9);
 });
 
 test('a loop volume is only sent when it changes', () => {
