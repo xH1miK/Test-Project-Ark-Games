@@ -36,12 +36,15 @@
       },
       {
         "__id__": 466
+      },
+      {
+        "__id__": 468
       }
     ],
     "_active": true,
     "_components": [],
     "_prefab": {
-      "__id__": 467
+      "__id__": 469
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -72,7 +75,7 @@
     },
     "autoReleaseAssets": false,
     "_globals": {
-      "__id__": 472
+      "__id__": 474
     },
     "_id": "b1579e2a-b71a-410a-b37e-963a7b4c2c7e"
   },
@@ -13776,6 +13779,9 @@
     "finaleView": {
       "__id__": 449
     },
+    "tutorialView": {
+      "__id__": 467
+    },
     "_id": "b07QoWl5RADJsJXLkNhV0X"
   },
   {
@@ -16251,6 +16257,63 @@
     "_id": "5a7vcIzulFm6m0mL5eBY7d"
   },
   {
+    "__type__": "ac265aGc3pOkZfIDyyYD/lx",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 468
+    },
+    "_enabled": true,
+    "__prefab": null,
+    "_id": "14jp5IBU9H/47UKYl3RZwq"
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "Tutorial",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "_parent": {
+      "__id__": 1
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 467
+      }
+    ],
+    "_prefab": null,
+    "_lpos": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_lrot": {
+      "__type__": "cc.Quat",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "w": 1
+    },
+    "_lscale": {
+      "__type__": "cc.Vec3",
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "_mobility": 0,
+    "_layer": 1073741824,
+    "_euler": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_id": "680/uoIa5PN7VJVPLTef7E"
+  },
+  {
     "__type__": "cc.PrefabInfo",
     "root": null,
     "asset": null,
@@ -16258,10 +16321,10 @@
     "instance": null,
     "targetOverrides": [
       {
-        "__id__": 468
+        "__id__": 470
       },
       {
-        "__id__": 470
+        "__id__": 472
       }
     ],
     "nestedPrefabInstanceRoots": [
@@ -16287,7 +16350,7 @@
       "__id__": 328
     },
     "targetInfo": {
-      "__id__": 469
+      "__id__": 471
     }
   },
   {
@@ -16310,7 +16373,7 @@
       "__id__": 328
     },
     "targetInfo": {
-      "__id__": 471
+      "__id__": 473
     }
   },
   {
@@ -16322,28 +16385,28 @@
   {
     "__type__": "cc.SceneGlobals",
     "ambient": {
-      "__id__": 473
-    },
-    "shadows": {
-      "__id__": 474
-    },
-    "_skybox": {
       "__id__": 475
     },
-    "fog": {
+    "shadows": {
       "__id__": 476
     },
-    "octree": {
+    "_skybox": {
       "__id__": 477
     },
-    "skin": {
+    "fog": {
       "__id__": 478
     },
-    "lightProbeInfo": {
+    "octree": {
       "__id__": 479
     },
-    "postSettings": {
+    "skin": {
       "__id__": 480
+    },
+    "lightProbeInfo": {
+      "__id__": 481
+    },
+    "postSettings": {
+      "__id__": 482
     },
     "bakedWithStationaryMainLight": false,
     "bakedWithHighpLightmap": false
