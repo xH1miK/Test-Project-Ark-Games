@@ -342,7 +342,7 @@ export const Config = {
    * fills whatever screen the frame is fitted to.
    */
   finale: {
-    title: { text: 'GATE OPEN!', pop: 0.45, height: 0.2, pulseScale: 1.05, pulsePeriod: 0.9 },
+    title: { text: 'GATE OPEN!', pop: 0.45, height: 0.26, pulseScale: 1.05, pulsePeriod: 0.9 },
     confetti: {
       count: 64,
       /** Share fired from the bottom corners (the rest rains from the top over `rainDelay` s). */
