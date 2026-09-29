@@ -36,6 +36,24 @@ export function upgradeLegs(from, shredder, pad) {
   return legs;
 }
 
+/**
+ * Legs from `from` (the tractor after a hand-in, in or beside the shredder's zone) onto the gate pad,
+ * standing there until the gate starts to open (the condition `gateOpen`, which the scenario registers):
+ * the end of the full run (M12). South of the shredder the way is straight; else round it on the
+ * tractor's side and down that side first. The gate pad lies south-west of the shredder.
+ */
+export function gateLegs(from, shredder, pad) {
+  const legs = [];
+  if (from.z > shredder.z - 3) {
+    const side = from.x >= shredder.x ? shredder.x + 4.55 : shredder.x - 4.55;
+    if (from.z > shredder.z - 1.5) legs.push({ name: 'gate: round the shredder', kind: 'goto', x: side, z: from.z, radius: 0.9 });
+    legs.push({ name: 'gate: down the side', kind: 'goto', x: side, z: -8, radius: 0.9 });
+  }
+  legs.push({ name: 'gate: onto the pad', kind: 'goto', x: pad.x, z: pad.z, radius: 0.5, until: 'gateOpen', timeout: 30 });
+  legs.push({ name: 'gate: stand until paid', kind: 'stop', time: 3, until: 'gateOpen', timeout: 10 });
+  return legs;
+}
+
 /** Where balls are counted (world XZ): the arena inside its rocks. */
 export const SWEEP_AREA = { minX: -7, maxX: 17, minZ: -23, maxZ: 20 };
 

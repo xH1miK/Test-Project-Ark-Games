@@ -17,7 +17,7 @@ import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
 import { Gate } from '../../assets/scripts/world/Gate.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
-import { PHASES, pickFillTarget, roundLegs, sweepFrame, upgradeLegs } from '../scenarios/lib/sweep.mjs';
+import { PHASES, gateLegs, pickFillTarget, roundLegs, sweepFrame, upgradeLegs } from '../scenarios/lib/sweep.mjs';
 
 /** The bucket's settings the way GameRoot builds them. */
 export const BUCKET_SETTINGS = { ...Config.bucket, radius: Config.balls.radius, gravity: Config.balls.gravity };
@@ -327,7 +327,8 @@ export function accountHeld(world) {
  */
 export function driveLegs(world, legs, nextDt, { targets = {}, until = {} } = {}) {
   const { tractor, balls } = world;
-  const conditions = { full: () => world.bucket.full, inZone: () => world.shredder.inZone, ...until };
+  // `full` is against the tractor's tier: the bucket follows a new tier on its next step (M12).
+  const conditions = { full: () => world.bucket.count >= tractor.bucketCapacity, inZone: () => world.shredder.inZone, ...until };
   const results = [];
   for (const leg of legs) {
     if (leg.kind === 'tier') {
@@ -459,6 +460,80 @@ export function longRun(world, nextDt, onRound) {
   }
   rounds.upgrade ??= { round: upgradedIn + 1, onTheWay: true, legs: [] };
   return rounds;
+}
+
+/**
+ * The whole run from a fresh start (M12), played the way a careful player would, with no coin put in
+ * from outside: tier-1 rounds (fill up near the next tour point, hand in) until the purse can pay the
+ * upgrade pad, then onto the pad; tier-2 rounds until the purse can pay the gate pad, then onto that
+ * one and stand until the gate starts to open; then the frames until it is open. The rounds are the
+ * `long-run` ones (roundLegs / pickFillTarget); a pad is visited only when the purse, with the coins
+ * still in the air toward it, holds what it lacks. The world needs the shredder and the pads.
+ * `nextDt()` gives each frame's time (called at the start of a frame, so it also sees the state the
+ * last one left: a test's per-frame probe can hang on it). Returns { rounds (as longRun's, minus
+ * `phase`), trips (visits to a pad: { pad, round, legs }), marks (game time and the state at the first
+ * of each event: firstScoop, firstCoins, firstHandIn, upgradePad (shown), tier2, upgradePaid, gatePaid,
+ * gateOpening, gateOpened), clock, ended (the gate is open) }.
+ */
+export function fullRun(world, nextDt, onRound, { maxRounds = 80 } = {}) {
+  const { balls, bucket, shredder, tractor, pads, purse, coins, events, gate } = world;
+  const until = { upgraded: () => tractor.tier >= 2, gateOpen: () => gate.phase !== 'closed' };
+  let clock = 0;
+  const marks = {};
+  const mark = (name) => { marks[name] ??= { clock: +clock.toFixed(3), shredded: shredder.shredded, purse: purse.total, tier: tractor.tier }; };
+  const next = () => {
+    if (pads.upgrade.shown) mark('upgradePad');
+    const dt = nextDt();
+    clock += dt;
+    return dt;
+  };
+  events.on('ballScooped', () => mark('firstScoop'));
+  events.on('purseChanged', () => mark('firstCoins'));
+  events.on('loadHandedIn', () => mark('firstHandIn'));
+  events.on('tierChanged', ({ tier }) => mark(`tier${tier}`));
+  events.on('padPaid', ({ padId }) => mark(`${padId}Paid`));
+  events.on('gateOpening', () => mark('gateOpening'));
+  events.on('gateOpened', () => mark('gateOpened'));
+
+  const frameOptions = sweepFrame(SHREDDER_POSE, Config.shredder.zoneHalf, pads.gate, Config.pads.zoneHalf);
+  const tabu = [];
+  const targets = {
+    balls: (leg, stalled) => {
+      if (stalled) tabu.push(stalled.cell);
+      return pickFillTarget(balls, tractor, { ...frameOptions, toward: leg.toward, minMass: leg.minMass, clearance: leg.clearance, tabu, obstacles: world.grid });
+    },
+  };
+  const rounds = [];
+  const trips = [];
+  let round = 0;
+  let lastTrip = -1;
+  while (round < maxRounds && gate.phase === 'closed') {
+    // The pad the player is saving for: the upgrade, then the gate.
+    const goal = pads.upgrade.closed ? pads.gate : pads.upgrade;
+    if (lastTrip !== round && goal.shown && purse.total + coins.pending >= goal.missing) {
+      lastTrip = round;
+      const toGate = goal === pads.gate;
+      const legs = toGate ? gateLegs(tractor, SHREDDER_POSE, pads.gate) : upgradeLegs(tractor, SHREDDER_POSE, pads.upgrade);
+      trips.push({ pad: toGate ? 'gate' : 'upgrade', round, legs: driveLegs(world, legs, next, { until }) });
+      continue;
+    }
+    const [fillLeg, sellLeg] = roundLegs(round, tractor.tier - 1, SHREDDER_POSE);
+    const [fill] = driveLegs(world, [fillLeg], next, { targets, until });
+    const filled = bucket.count;
+    const capacity = tractor.bucketCapacity;
+    const handed = shredder.handedIn;
+    const [sell] = driveLegs(world, [sellLeg], next, { until });
+    const entry = { round, tier: tractor.tier, fill, sell, filled, capacity, sold: shredder.handedIn - handed, clock };
+    rounds.push(entry);
+    onRound?.(entry);
+    round++;
+  }
+  // The gate opens over openTime; the frames until it is open (the finale's start is the moment it opens).
+  for (let f = 0; f < 600 && gate.phase !== 'open'; f++) {
+    frame(world, next(), 0, 0);
+    balls.clearMoved();
+  }
+  return { rounds, trips, marks, clock, ended: gate.phase === 'open' };
 }
 
 /** The route of the browser `balls` scenario on 28.09: a short push into the carpet, T1 through it, then T2. */

@@ -3,7 +3,7 @@
 // working tree. A plain `git switch main && git merge` briefly rewinds the files to main, and the
 // open Cocos editor would start re-importing assets or reloading the scene in the middle of it.
 //
-//   node tools/merge.mjs [--into main] [--dry-run]
+//   node tools/merge.mjs [--into main] [--dry-run] [--trailer "Co-Authored-By: <the model that worked> <noreply@anthropic.com>"]
 //
 // Needs a clean working tree. Afterwards HEAD is on the target branch. If the target has not moved
 // since the branch point, its tree equals the working tree and the switch changes no file on disk.
@@ -17,6 +17,8 @@ const option = (name, fallback) => {
 };
 const into = option('--into', 'main');
 const dryRun = argv.includes('--dry-run');
+// The attribution line comes from the caller (it depends on the model that did the work); none by default.
+const trailer = option('--trailer', '');
 
 const git = (args, input) =>
   execFileSync('git', args, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -43,7 +45,7 @@ try {
 }
 
 const commits = git(['log', '--reverse', '--format=- %s', `${into}..HEAD`]);
-const message = `Merge branch '${branch}'\n\n${commits}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n`;
+const message = `Merge branch '${branch}'\n\n${commits}\n${trailer ? `\n${trailer}\n` : ''}`;
 if (dryRun) {
   console.log(message);
   process.exit(0);
