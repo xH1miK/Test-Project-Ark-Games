@@ -402,3 +402,16 @@ New session from the handoff prompt. The editor was open and the `cocos` MCP too
 | 19:08–19:26 | GPU `file://`, one at a time, 15 s between runs (`tools/run-batch.sh`, in the background): `level`, `drive`, `balls`, `scoop`, `core-loop`, `pads`, `upgrade`, `hud-atlas`, `gate`, `tutorial`, `long-run` | AI | All 11 PASS portrait + landscape at the first run (the two one-off timing flakes of M11 did not repeat); 0 `zm-check-` processes after |
 | 19:27–19:36 | SwiftShader `file://`, gently (`ZM_AFFINITY=0xFF000`, one at a time, a minute's pause, `ZM_LONG_SHARES=0.1,0.2`): `full-run`, `tutorial`, `long-run` | AI | All PASS portrait + landscape at 10–12 fps; the gate opens at 20.3–20.4 s of game time; 0 processes left after |
 | 19:36–19:45 | Docs: CLAUDE.md (M12 paragraph, `full-run`, `run-batch.sh`), PLAN (M12 ticked, the stage ticked, table "Замеры полного забега", remarks list), UNITY_TO_COCOS (update events on pause), this log. Final state for M12: 159 tests, typecheck OK, HTML 2.850 MB (unchanged); GPU — all 12 scenarios × 2 orientations; SwiftShader — `full-run`, `tutorial`, `long-run` quick × 2 | AI | What broke on the way: the bot's stale `full` after a tier change; my backticks in a template literal; a shell heredoc with quotes that would not parse (files written with the file tool); the FPS windows counting pauses. Human: nothing needed this milestone |
+
+
+## 2026-09-29 (Tue) — Stage "Juice and UI art", J1: coin sprites (~19:05–20:45), branch `juice/j1-coins`
+
+New session from the handoff prompt (editor open, `cocos` MCP loaded). The user went through the PLAN's list of remarks item by item (do: portrait start, upgrade pad peek, pointer over the price, coin sprites, confetti, landscape; leave: arrow rule, T2 over MAX, economy; no ribbon; finale camera pull-out only if nearly free) and picked dust variant A (own pooled quads, ~1 dc); split into J1..J4 (J5 economy dropped).
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 19:05–19:20 | Plan and costs told, decisions taken (above) | AI ↔ human | — |
+| 19:20–20:20 | Code: `CoinFlight.lane`, `fx/CoinArc` (pure), `CoinFlightView`, GameRoot wiring; scene through MCP: `Canvas/Hud/CoinFlights` + camera/coin/GameRoot refs (structural diff: 5 changes) | AI | 3 new tests; typecheck OK. Slips: `python3` is not there (edits redone with Edit); shell heredoc with quotes failed again (file tool); scene-script results come back only through `console.log` |
+| 20:22 | Build 15 s, pack **2.852 MB** (+2 KB) | AI | — |
+| 20:25 | Scenario `coin-fx` (GPU, `file://`, both orientations) | AI | PASS first run: per frame one sprite per coin, poses = formula, on screen, UI_2D, draw calls 19 = 19 with the node off, ledger and HUD hold; shots show coins over the counter and from the counter |
+| 20:30–20:50 | GPU one at a time: `drive`, `core-loop`, `pads`, `hud-atlas`, `gate`, `full-run` | AI | All PASS; `gate` portrait failed once on "gateOpened 0.850 s ± a frame" (a hitch frame, like the M11 flakes), clean on rerun (0.867 / 0.851 s); 0 `zm-check-` processes left |
