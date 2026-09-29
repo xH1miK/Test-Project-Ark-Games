@@ -24,7 +24,8 @@ export class TutorialView extends Component {
     const { color, arrowScale, pointerScale, pointerPitch } = Config.tutorial.look;
     const mesh = utils.MeshUtils.createMesh(buildArrowGeometry(), new Mesh());
     const material = new Material();
-    material.initialize({ effectName: 'builtin-standard' });
+    // Both markers share the mesh and the material: instanced, they are one draw call.
+    material.initialize({ effectName: 'builtin-standard', defines: { USE_INSTANCING: true } });
     material.setProperty('albedo', new Color(color[0], color[1], color[2], 255));
     material.setProperty('roughness', 0.9);
     material.setProperty('metallic', 0);
