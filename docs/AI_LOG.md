@@ -434,3 +434,14 @@
 `| 22:45–23:10 | GPU one at a time: all 15 scenarios. Flakes: `gate` landscape (`gateOpened` 0.849 s: the probe's real-time clock against the gate's clamped sim clock — lower bound now also ± a frame), `long-run` landscape then portrait (T2 round 17 "none left", 59 of 60: the fill policy running out of balls near (12, −9), the same flake as M11; clean on a rerun), `camera` landscape (mine, fixed) | AI | All PASS on the rerun; 0 `zm-check-` processes. `drive` needed its camera offset check multiplied by the framing |
 `| 23:10 | SwiftShader (`ZM_AFFINITY=0xFF000`): `camera`, `puffs`, `coin-fx`, `drive`, `full-run` | AI | see the next entry |
 `| 23:15 | SwiftShader results: \`camera\`, \`puffs\`, \`coin-fx\`, \`drive\`, \`full-run\` all PASS portrait + landscape (5–12 fps); 0 processes left | AI | HTML 2.860 MB; 168 tests |
+
+## 2026-09-29 (Tue) — Stage "Juice and UI art", J4: small things (~23:15–00:10), branch `juice/j4-polish`
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 23:15–23:35 | The pointer over the pads raised (4.4), confetti 140 pieces and bigger, **landscape UI**: instead of scaling one plate (the remark), `UiFit` fits a 1400-unit-tall frame in landscape, so the plate, the joystick and the title are all 1.6x bigger (the same Widgets, no per-element hacks). The black corners of the remark are the dark clear colour (24, 20, 34) beyond the rocks: with the closer landscape camera they are hardly seen, left as is | AI | Shots: price "100" fully readable, denser confetti, the finale pulled out to the gate, a big counter and title in landscape. `gate` had a hard-coded 64 pieces (now from Config) |
+| 23:35–00:00 | GPU one at a time: `hud-atlas`, `core-loop`, `drive`, `balls`, `pads`, `upgrade`, `gate`, `tutorial`, `camera`, `full-run`, `coin-fx`, `puffs` | AI | All PASS both orientations; 0 processes. Full run: gate open at 18.57 s, 60 fps, draw calls 16..20 |
+| 00:00–00:10 | Stage-end SwiftShader (`ZM_AFFINITY=0xFF000`, `ZM_LONG_SHARES=0.1,0.2`): `hud-atlas`, `full-run`, `long-run` | AI | see the result line below |
+
+Stage "Juice and UI art" recap (what the user decided vs. what the AI did): the user went through the remarks list and picked (do / leave / drop; dust variant A; no ribbon; economy as in the example; the finale camera "only if free": it turned out free); the AI made the four milestones, three new scenarios and every measurement. Costs: HTML +10 KB, +1 draw call only while dust is in the air.
+| 00:10 | SwiftShader results: `hud-atlas`, `full-run`, `long-run` (quick) all PASS portrait + landscape (5–12 fps), 0 processes left | AI | Stage closed: 168 tests, typecheck OK, HTML 2.860 MB |
