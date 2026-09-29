@@ -116,6 +116,7 @@ export default async function gate(t) {
   await installLoopProbe(t);
   await t.evaluate(GATE_PROBE);
   const cfg = await t.evaluate('__zm.config.gate');
+  cfg.confettiCount = await t.evaluate('__zm.config.finale.confetti.count');
   const price = await t.evaluate('__zm.config.economy.gatePrice');
 
   // 1. Sealed and waiting.
@@ -195,7 +196,7 @@ export default async function gate(t) {
   t.check(q.titleActiveEarly === 0 && ts.length > 10 && peak(ts) > 1 && peak(ts) < 1.2 && ts[0] < 0.5, `the title popped up with a spring (from ${ts[0]}, peak ${peak(ts)}) in the payment frame`);
   const settled = ts.slice(Math.floor(ts.length / 2));
   t.check(settled.every((v) => v > 0.99 && v < 1.06), `then it pulses between 1 and 1.05 (${Math.min(...settled)} .. ${Math.max(...settled)})`);
-  t.check(q.maxFlying >= 20 && q.pieces === 64 && q.piecesLayerOff === 0, `confetti: up to ${q.maxFlying} pieces in the air, ${q.pieces} pooled, all on UI_2D`);
+  t.check(q.maxFlying >= 20 && q.pieces === cfg.confettiCount && q.piecesLayerOff === 0, `confetti: up to ${q.maxFlying} pieces in the air, ${q.pieces} pooled, all on UI_2D`);
   const vis = q.joyVisibility;
   t.check(vis[0] <= 1 && vis[vis.length - 1] < 0.01 && vis.every((v, k) => k === 0 || v <= vis[k - 1] + 1e-9) && q.joyOpacity === 0,
     `the joystick faded out (${vis[0]} -> ${vis[vis.length - 1]}, opacity ${q.joyOpacity})`);

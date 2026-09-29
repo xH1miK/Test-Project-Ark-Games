@@ -333,7 +333,7 @@ export const Config = {
    */
   tutorial: {
     arrow: { forward: 3.2, height: 1.5, turnSpeed: 540 },
-    pointer: { bob: 0.15, period: 1.1, shredderHeight: 3, padHeight: 2.5 },
+    pointer: { bob: 0.15, period: 1.1, shredderHeight: 3, padHeight: 4.4 },
     look: { color: [60, 255, 80], arrowScale: 1.4, pointerScale: 1.54, pointerPitch: 60 },
   },
 
@@ -360,6 +360,8 @@ export const Config = {
     /** Portrait design frame; the UI scales to fit any aspect ratio. */
     designWidth: 1280,
     designHeight: 2276,
+    /** Landscape: the frame to fit is this tall (not the whole portrait height), so the HUD and the joystick are not tiny on a wide, low screen. */
+    landscapeHeight: 1400,
     /** The coin counter swells to `punchScale` and back over `punchTime` seconds when coins arrive. */
     coinHud: { punchScale: 1.16, punchTime: 0.14 },
   },
@@ -399,7 +401,7 @@ export const Config = {
   finale: {
     title: { text: 'GATE OPEN!', pop: 0.45, height: 0.26, pulseScale: 1.05, pulsePeriod: 0.9 },
     confetti: {
-      count: 64,
+      count: 140,
       /** Share fired from the bottom corners (the rest rains from the top over `rainDelay` s). */
       cannonShare: 0.6,
       /** Units/s²: a fired piece falls fast, a rain piece drifts. */
@@ -415,7 +417,7 @@ export const Config = {
       life: { fired: 2.8, rain: 4.5 },
       fade: 0.5,
       /** Piece size, share of the sprite (32 x 20 units), and how fast it tumbles (degrees/s) and flutters (rad/s). */
-      size: { min: 0.8, max: 1.5 },
+      size: { min: 1.1, max: 2.1 },
       spin: 540,
       flutter: { min: 6, max: 14 },
       colors: ['#ff4d6d', '#ffd23f', '#3ddc97', '#4cc9f0', '#b57bff', '#ff9f1c'],
