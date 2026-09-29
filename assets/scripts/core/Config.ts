@@ -340,6 +340,12 @@ export const Config = {
     spritesPerPayout: 6,
     maxAlive: 20,
     seed: 5,
+    /**
+     * How a coin sprite is drawn on the screen (UI units): it bulges up to `arc` off the straight line
+     * (by its lane), spins `spin` degrees, is `size` wide at the end, swells to `pop` times that in
+     * the middle of its flight and grows from `startScale` of it over the first `growth` of the flight.
+     */
+    sprite: { arc: 260, spin: 420, size: 76, pop: 1.45, startScale: 0.5, growth: 0.15 },
   },
 
   ui: {

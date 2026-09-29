@@ -25,6 +25,7 @@ import { TractorView } from '../tractor/TractorView';
 import { TutorialFlow } from '../tutorial/TutorialFlow';
 import { TutorialMarkers } from '../tutorial/TutorialMarkers';
 import { TutorialView } from '../tutorial/TutorialView';
+import { CoinFlightView } from '../ui/CoinFlightView';
 import { CoinHud } from '../ui/CoinHud';
 import { FinaleView } from '../ui/FinaleView';
 import { Gate } from '../world/Gate';
@@ -81,6 +82,9 @@ export class GameRoot extends Component {
   @property({ type: PayPadView, tooltip: 'On the gate pad spot: the pad stands where that node is.' })
   gatePadView: PayPadView | null = null;
 
+  @property({ type: CoinFlightView, tooltip: 'Draws the coins in the air (under Canvas/Hud, after the coin counter).' })
+  coinFlightView: CoinFlightView | null = null;
+
   @property({ type: PayPadView, tooltip: 'The price sign over the gate (shows the gate pad).' })
   gateSignView: PayPadView | null = null;
 
@@ -111,10 +115,10 @@ export class GameRoot extends Component {
 
   protected onLoad(): void {
     const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
-      gateView, finaleView, tutorialView } = this;
+      gateView, finaleView, tutorialView, coinFlightView } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -173,6 +177,11 @@ export class GameRoot extends Component {
     this.events.on('tierChanged', ({ tier }) =>
       this.camera.zoomTo(Math.pow(Config.camera.tierZoom, tier - 1), Config.camera.zoomTime));
 
+    coinFlightView.bind(coinHud.icon!, [
+      { flights: this.coins, toHud: true },
+      { flights: upgradePad.flights, toHud: false },
+      { flights: gatePad.flights, toHud: false },
+    ]);
     joystickView.bind(this.joystick);
     tractorView.render(this.tractor);
     cameraView.render(this.camera);
@@ -204,6 +213,7 @@ export class GameRoot extends Component {
       tutorialView,
       ballView,
       coinHud,
+      coinFlightView,
       tractorView,
       camera: this.camera,
     });
@@ -240,6 +250,7 @@ export class GameRoot extends Component {
     this.tractorView!.render(this.tractor);
     this.camera.update(step, this.tractor.x, 0, this.tractor.z);
     this.cameraView!.render(this.camera);
+    this.coinFlightView!.render();
     this.markers.update(step, this.tractor.x, this.tractor.z, this.tutorial.target);
     this.tutorialView!.render(this.markers);
     this.joystickView!.render();

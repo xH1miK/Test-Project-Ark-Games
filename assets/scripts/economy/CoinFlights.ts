@@ -34,6 +34,8 @@ export interface CoinFlight {
   /** Seconds in the air so far, and its whole flight. */
   time: number;
   duration: number;
+  /** -1..1: which side of the straight line a sprite bulges to (a payout's coins fan out). */
+  lane: number;
 }
 
 export class CoinFlights {
@@ -52,7 +54,7 @@ export class CoinFlights {
     this.receiver = receiver;
     this.random = mulberry32(settings.seed);
     this.pool = [];
-    for (let k = 0; k < settings.maxAlive; k++) this.pool.push({ x: 0, y: 0, z: 0, value: 0, time: 0, duration: 1 });
+    for (let k = 0; k < settings.maxAlive; k++) this.pool.push({ x: 0, y: 0, z: 0, value: 0, time: 0, duration: 1, lane: 0 });
     this.coins = this.pool;
   }
 
@@ -87,6 +89,7 @@ export class CoinFlights {
       coin.value = share + (extra > 0 ? 1 : 0);
       if (extra > 0) extra--;
       coin.time = 0;
+      coin.lane = room === 1 ? 0.5 : (2 * k) / (room - 1) - 1;
       coin.duration = s.flightTime * (1 + s.jitter * (2 * this.random() - 1));
     }
     this.inAir += total;
