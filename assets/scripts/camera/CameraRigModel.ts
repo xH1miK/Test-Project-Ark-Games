@@ -61,6 +61,7 @@ export class CameraRigModel {
   private peekX = 0;
   private peekZ = 0;
   private peekElapsed = 0;
+  private started = 0;
 
   constructor(settings: CameraRigSettings) {
     this.settings = settings;
@@ -105,6 +106,12 @@ export class CameraRigModel {
     this.peekX = x;
     this.peekZ = z;
     this.peekElapsed = 0;
+    this.started++;
+  }
+
+  /** How many beats were started so far (QA checks read it). */
+  get peeksStarted(): number {
+    return this.started;
   }
 
   /** 0..1: how far the beat in progress has taken the camera (0 = none). */

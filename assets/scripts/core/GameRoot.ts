@@ -2,7 +2,7 @@ import { _decorator, Camera, Component, Node, Vec3, screen } from 'cc';
 import { Config } from './Config';
 import { EventBus } from './Events';
 import type { GameEvents } from './Events';
-import { exposeForQa } from './QaBridge';
+import { exposeForQa, qaFlag } from './QaBridge';
 import { layCarpet } from '../balls/BallCarpet';
 import type { CarpetHole } from '../balls/BallCarpet';
 import { BallField } from '../balls/BallField';
@@ -197,6 +197,7 @@ export class GameRoot extends Component {
     this.camera = new CameraRigModel(Config.camera);
     this.camera.setAspect(screen.windowSize.width / screen.windowSize.height);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
+    if (!qaFlag('nopeek')) this.camera.peek(pose.x, pose.z, Config.camera.peekStart);
     this.events.on('tierChanged', ({ tier }) =>
       this.camera.zoomTo(Math.pow(Config.camera.tierZoom, tier - 1), Config.camera.zoomTime));
 

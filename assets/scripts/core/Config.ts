@@ -171,6 +171,8 @@ export const Config = {
     /** The upgrade pad popping up: the camera leans toward it and pulls out a little, then comes back. */
     peekPad: { share: 0.55, zoom: 1.15, inTime: 0.35, holdTime: 0.7, outTime: 0.6 },
     /** The gate opening: the camera pulls out toward the gate and stays (the run is over). */
+    /** The start: the camera leans toward the shredder (the first target, off the screen of a tall phone) and comes back. */
+    peekStart: { share: 0.4, zoom: 1.2, inTime: 0, holdTime: 1.6, outTime: 1.4 },
     peekGate: { share: 0.65, zoom: 1.3, inTime: 0.9, holdTime: Infinity, outTime: 1 },
   },
 

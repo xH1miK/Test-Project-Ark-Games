@@ -32,8 +32,13 @@ export default async function cameraFrame(t) {
   await installLoopProbe(t);
   const cfg = await t.evaluate('__zm.config.camera');
 
-  // 1. The start.
-  await gameWait(t, 1);
+  // 1. The start: the beat toward the shredder is on (the page has no nopeek flag for this scenario).
+  // The game started the beat at load (the scenario begins some seconds later: it is over by now); play it again from the same place.
+  t.check((await t.evaluate('__zm.camera.peeksStarted')) >= 1, 'the game started the start beat at load');
+  await gameWait(t, 0.5);
+  await t.evaluate(`(() => { const sh = cc.find('Level/Shredder').worldPosition; __zm.camera.peek(sh.x, sh.z, __zm.config.camera.peekStart); })()`);
+  await t.waitFor('__zm.camera.peekWeight > 0.99', 10000);
+  await gameWait(t, 0.8);
   const s = await t.evaluate(`(() => { const c = __zm.camera, a = innerWidth / innerHeight, k = __zm.config.camera.aspect;
     const sh = cc.find('Level/Shredder').worldPosition, tr = __zm.tractor;
     return { framing: c.framing, aspect: a, want: Math.min(k.max, Math.max(k.min, Math.pow(k.ref / a, k.power))), boost: c.boost,
@@ -41,10 +46,13 @@ export default async function cameraFrame(t) {
   const shredder = await t.evaluate(SCREEN_OF(...s.shredder));
   const tractor = await t.evaluate(SCREEN_OF(...s.tractor));
   t.log(`start: aspect ${s.aspect.toFixed(3)}, framing ${s.framing.toFixed(3)}; shredder on screen at ${fmt(shredder)}, tractor at ${fmt(tractor)}`);
-  t.check(Math.abs(s.framing - s.want) < 1e-6 && s.boost === 1, 'the framing follows the screen shape');
-  t.check(inside(tractor, 0.1), 'the tractor is on the screen');
+  t.check(Math.abs(s.framing - s.want) < 1e-6 && Math.abs(s.boost - cfg.peekStart.zoom) < 1e-6, 'the framing follows the screen shape, the start beat pulls out');
+  t.check(inside(tractor, 0.05), 'the tractor is on the screen');
   t.check(inside(shredder, 0.02), 'the shredder, the target of the first step, is on the screen at the start');
   await t.shot('start');
+  await gameWait(t, cfg.peekStart.holdTime + cfg.peekStart.outTime + 1.5);
+  const back = await t.evaluate(`(() => { const c = __zm.camera, tr = __zm.tractor; return { w: c.peekWeight, boost: c.boost, lag: Math.hypot(c.focus.x - tr.x, c.focus.z - tr.z) }; })()`);
+  t.check(back.w === 0 && back.boost === 1 && back.lag < 0.05, `the start beat is over: the camera is back on the tractor (lag ${back.lag.toFixed(3)})`);
 
   // 2. The first hand-in pops the pad up; the camera peeks.
   await t.evaluate(`(() => { const c = __zm.camera, pad = __zm.pads.upgrade; window.__cam = { peak: 0, atPeak: null, frames: 0, shownAt: -1, start: null };

@@ -29,7 +29,7 @@ const webgl1 = argv.includes('--webgl1') && Boolean(argv.splice(argv.indexOf('--
 const hiddenExtensions = takeAll('--hide-ext');
 const waitSec = Number(takeAll('--wait')[0] || 15);
 const scenarioName = takeAll('--scenario')[0];
-const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1'].filter(Boolean);
+const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1', scenarioName && scenarioName !== 'camera' && 'nopeek=1'].filter(Boolean);
 const shotsDir = resolve(takeAll('--shots')[0] || 'dist/shots');
 const target = argv[0] || 'dist/ZombieMiner.html';
 if (!sizes.length) sizes.push('390x844', '844x390'); // phone portrait + landscape (CSS px)
