@@ -398,6 +398,40 @@ export const Config = {
     },
   },
 
+  /**
+   * Sound (numbers of the example's sound table, docs/reference-example-teardown.md §7; the clips are
+   * calibrated to the example's file levels, tools/audio/sounds.mjs). One-shots: `volume` x a random factor in
+   * `jitter`, after a play the next one waits `minInterval..maxInterval` s, the variant never repeats the last
+   * one (`random`) or steps with a pad's progress (`progress`). Loops: `volume` at full gain, `fade` seconds
+   * to go from silence to full and back. At most `maxShotsPerFrame` one-shots start in a frame and at most
+   * `maxVoices` sound at once; until a real gesture unlocks the browser's audio the start of the loops is
+   * asked again every `unlockRetry` s after each gesture. Names are the assets of assets/audio.
+   */
+  sound: {
+    maxVoices: 24,
+    maxShotsPerFrame: 4,
+    unlockRetry: 0.5,
+    historySize: 64,
+    seed: 17,
+    /** The tractor counts as moving (the engine loop runs) above this speed, units/s. */
+    engineMinSpeed: 0.3,
+    loops: {
+      music: { clip: 'music', volume: 0.3 * 0.35, fade: 0.25 },
+      engine: { clip: 'engine', volume: 0.040095, fade: 0.15 },
+      // Its level is the rollers' speed share, which already ramps.
+      grind: { clip: 'grind', volume: 0.22, fade: 0 },
+    },
+    shots: {
+      ball: { clips: ['ball_1', 'ball_2', 'ball_3', 'ball_4', 'ball_5'], volume: 0.28, jitter: [0.8, 1.2], minInterval: 0.055, maxInterval: 0.125, pick: 'random' },
+      coin: { clips: ['coin_1', 'coin_2', 'coin_3', 'coin_4', 'coin_5'], volume: 0.055, jitter: [0.7, 1.3], minInterval: 0.2, maxInterval: 0.2, pick: 'random' },
+      // The pad's coins: the same clinks, rising in pitch as the price fills.
+      spend: { clips: ['coin_1', 'coin_2', 'coin_3', 'coin_4', 'coin_5'], volume: 0.08, jitter: [1, 1], minInterval: 0.09, maxInterval: 0.16, pick: 'progress' },
+      upgrade: { clips: ['upgrade'], volume: 0.65, jitter: [1, 1], minInterval: 0, maxInterval: 0, pick: 'random' },
+      purchase: { clips: ['purchase'], volume: 0.65, jitter: [1, 1], minInterval: 0, maxInterval: 0, pick: 'random' },
+      gate: { clips: ['gate'], volume: 0.55, jitter: [1, 1], minInterval: 1, maxInterval: 1, pick: 'random' },
+    },
+  },
+
   finale: {
     title: { text: 'GATE OPEN!', pop: 0.45, height: 0.26, pulseScale: 1.05, pulsePeriod: 0.9 },
     confetti: {

@@ -3,7 +3,10 @@ import { Config } from './Config';
 import { EventBus } from './Events';
 import type { GameEvents } from './Events';
 import { exposeForQa, qaFlag } from './QaBridge';
-import { layCarpet } from '../balls/BallCarpet';
+import { AudioManager } from '../audio/AudioManager';
+import { SoundPresenter } from '../audio/SoundPresenter';
+import { SoundView } from '../audio/SoundView';
+import { layCarpet, mulberry32 } from '../balls/BallCarpet';
 import type { CarpetHole } from '../balls/BallCarpet';
 import { BallField } from '../balls/BallField';
 import { BallRenderer } from '../balls/BallRenderer';
@@ -48,7 +51,7 @@ function yawOf(node: Node): number {
 /**
  * Composition root: creates the models, wires them to the scene's views and drives the frame in a
  * fixed order (update: input, then tractor -> scoop -> balls -> carry -> shredder in steps of at most
- * Config.time.maxStep, then the coins in the air, then the gate, then the pay pads; lateUpdate: views
+ * Config.time.maxStep, then the coins in the air, then the gate, then the pay pads; sound rules run first; lateUpdate: views
  * and camera).
  * The only place that knows every system (Unity analogy: a bootstrap MonoBehaviour).
  */
@@ -102,6 +105,9 @@ export class GameRoot extends Component {
   @property({ type: TutorialView, tooltip: 'On an empty node at the origin: draws the tutorial arrow and pointer.' })
   tutorialView: TutorialView | null = null;
 
+  @property({ type: SoundView, tooltip: 'Plays the sounds (holds the clips of assets/audio).' })
+  soundView: SoundView | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -118,15 +124,17 @@ export class GameRoot extends Component {
   private markers!: TutorialMarkers;
   private camera!: CameraRigModel;
   private puffs!: Puffs;
+  private sound!: AudioManager;
+  private soundPresenter!: SoundPresenter;
   private worldCamera!: Camera;
   private upgradePadSeen = false;
 
   protected onLoad(): void {
     const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
-      gateView, finaleView, tutorialView, coinFlightView, puffRenderer } = this;
+      gateView, finaleView, tutorialView, coinFlightView, puffRenderer, soundView } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer || !soundView) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs, sound) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -194,6 +202,14 @@ export class GameRoot extends Component {
     this.worldCamera = cameraView.getComponent(Camera)!;
     puffRenderer.bind(this.puffs);
 
+    // Sound: the rules (AudioManager) decide, SoundView plays; the presenter turns game events into sounds. The first
+    // real gesture of the page unlocks the browser's audio.
+    this.sound = new AudioManager(Config.sound, soundView, mulberry32(Config.sound.seed));
+    soundView.listenForGestures(() => this.sound.gesture());
+    this.soundPresenter = new SoundPresenter(this.events, this.sound, { tractor: this.tractor, shredder: this.shredder },
+      { engineMinSpeed: Config.sound.engineMinSpeed, prices: { upgrade: upgradePrice, gate: gatePrice } });
+    this.soundPresenter.start();
+
     this.camera = new CameraRigModel(Config.camera);
     this.camera.setAspect(screen.windowSize.width / screen.windowSize.height);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
@@ -240,6 +256,8 @@ export class GameRoot extends Component {
       coinFlightView,
       puffs: this.puffs,
       puffRenderer,
+      sound: this.sound,
+      soundView,
       tractorView,
       camera: this.camera,
     });
@@ -248,6 +266,9 @@ export class GameRoot extends Component {
   protected update(dt: number): void {
     const frame = Math.min(dt, Config.time.maxFrameDt);
     if (frame <= 0) return;
+    // Sound first: the loops follow last frame's world, this frame's events then play under this frame's caps.
+    this.soundPresenter.update();
+    this.sound.update(frame);
     this.joystick.update(frame);
     this.moveInput.setFromStick(this.joystick.stick.x, this.joystick.stick.y, this.camera.yaw);
     // A slow frame runs in several short steps: the balls must see the tractor move a little at a time.
