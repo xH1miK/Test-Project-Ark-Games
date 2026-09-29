@@ -4,7 +4,7 @@
 //
 //   node tools/art/procedural.mjs [name ...]
 //
-// curtain: the sheet in the gateway, 256x140 for a 7.09 x 3.88 unit opening (36 px per unit): a violet-pink
+// curtain: the sheet in the gateway, 187x126 for a 5.2 x 3.5 unit opening (36 px per unit; the doorway measured on the mesh is 5.06 x 3.3-3.5, the sheet tucks 0.07 behind each post): a violet-pink
 // glass with a wavy alpha and a three-layer glowing rim (the example's curtain: sheet colour 232,133,255,
 // alpha 0.72 +- 0.216 waves, rim 255,212,255 in three bands 0.16 / 0.065 / 0.022 units wide).
 // curtainSparks: 4-point diamonds strewn over the lower two thirds of the sheet, flashed while it opens.
@@ -18,7 +18,7 @@ import sharp from 'sharp';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** Sheet size in world units (the opening) and pixels per unit of its texture. */
-const SHEET = { width: 7.09, height: 3.88, ppu: 36 };
+const SHEET = { width: 5.2, height: 3.5, ppu: 36 };
 
 /** Small seeded PRNG (mulberry32), as the game's. */
 function mulberry32(seed) {
