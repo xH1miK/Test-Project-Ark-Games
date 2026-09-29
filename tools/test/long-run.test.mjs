@@ -10,7 +10,11 @@ test('long run: tier 1, the upgrade bought on the pad, tier 2: most of the carpe
   const total = balls.count;
   const problems = [];
   const ledger = () => purse.total + coins.pending + pads.upgrade.stored + pads.upgrade.inFlight + pads.gate.stored + pads.gate.inFlight;
-  const rounds = longRun(world, () => 1 / 30, (r) => {
+  let inGateZone = 0;
+  const rounds = longRun(world, () => {
+    if (pads.gate.inZone) inGateZone++;
+    return 1 / 30;
+  }, (r) => {
     // A full bucket at the end of the fill-up (tier 2 may come half way) is handed in whole.
     if (r.fill.reason !== 'full' || r.filled !== r.capacity) problems.push(`round ${r.round}: fill ended ${r.fill.reason} with ${r.filled} of ${r.capacity}`);
     if (r.sell.reason !== 'inZone' || r.sold !== r.filled) problems.push(`round ${r.round}: sell ended ${r.sell.reason}, sold ${r.sold} of ${r.filled}`);
@@ -28,6 +32,9 @@ test('long run: tier 1, the upgrade bought on the pad, tier 2: most of the carpe
   console.log(`long run: ${phases.join(' + ')} rounds, tier 2 from round ${upgrade.round} (${upgrade.onTheWay ? 'bought on the way' : 'drove onto the pad'}), ` +
     `shredded ${shredder.shredded} of ${total} (throat ${shredder.swallowed}), purse ${purse.total}, upgrade pad ${pads.upgrade.stored}`);
   assert.deepEqual(problems, []);
+  // Paying the gate ends the run, and the purse holds far more than its price on this tour.
+  assert.equal(inGateZone, 0, 'the tractor never set foot on the gate pad');
+  assert.ok(!pads.gate.paid && world.gate.phase === 'closed' && !world.input.isLocked, 'the gate stays shut, the controls on');
   assert.equal(tractor.tier, 2, 'tier 2 bought');
   assert.ok(pads.upgrade.paid && pads.upgrade.closed);
   assert.ok(upgrade.legs.every((l) => l.ok), JSON.stringify(upgrade.legs));

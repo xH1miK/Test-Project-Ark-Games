@@ -2,7 +2,8 @@
  * What the coins buy, in the order of the run. The gate pad is there from the start; the upgrade pad
  * is hidden until the first load is handed in to the shredder, then pops up in the carpet and throws
  * the balls under it clear. A bought upgrade pad closes (its counter reads "MAX") and the machine
- * goes up a tier (it announces `tierChanged` itself). Pure TypeScript: no engine imports.
+ * goes up a tier (it announces `tierChanged` itself). A bought gate pad ends the run: it goes away,
+ * the controls are switched off at once and the gate opens. Pure TypeScript: no engine imports.
  */
 
 import type { EventBus, GameEvents } from '../core/Events';
@@ -26,28 +27,50 @@ export interface Upgradable {
   setTier(tier: number): boolean;
 }
 
+/** The player's controls: switched off for good when the run is over. */
+export interface ControlsLock {
+  lock(): void;
+}
+
+/** What the gate pad buys: the gate, which opens (and announces the end of the run itself). */
+export interface Openable {
+  open(): void;
+}
+
+/** What the payments act on. */
+export interface ProgressionParts {
+  readonly ground: PadGround;
+  readonly machine: Upgradable;
+  readonly controls: ControlsLock;
+  readonly gate: Openable;
+}
+
 export class Progression {
   readonly upgradePad: PayPad;
   readonly gatePad: PayPad;
 
   private readonly settings: ProgressionSettings;
-  private readonly ground: PadGround;
-  private readonly machine: Upgradable;
+  private readonly parts: ProgressionParts;
 
-  constructor(settings: ProgressionSettings, upgradePad: PayPad, gatePad: PayPad, ground: PadGround, machine: Upgradable, events: EventBus<GameEvents>) {
+  constructor(settings: ProgressionSettings, upgradePad: PayPad, gatePad: PayPad, parts: ProgressionParts, events: EventBus<GameEvents>) {
     this.settings = settings;
     this.upgradePad = upgradePad;
     this.gatePad = gatePad;
-    this.ground = ground;
-    this.machine = machine;
+    this.parts = parts;
     upgradePad.hide();
     events.on('loadHandedIn', () => {
       if (!this.upgradePad.shown && !this.upgradePad.closed) this.reveal(this.upgradePad);
     });
     events.on('padPaid', ({ padId }) => {
-      if (padId !== this.upgradePad.id) return;
-      this.upgradePad.close();
-      this.machine.setTier(this.machine.tier + 1);
+      if (padId === this.upgradePad.id) {
+        this.upgradePad.close();
+        this.parts.machine.setTier(this.parts.machine.tier + 1);
+      } else if (padId === this.gatePad.id) {
+        // The end of the run: no more driving, the plate and the sign shrink away, the gate opens.
+        this.parts.controls.lock();
+        this.gatePad.hide();
+        this.parts.gate.open();
+      }
     });
   }
 
@@ -61,6 +84,6 @@ export class Progression {
   private reveal(pad: PayPad): void {
     pad.show();
     const { radius, speed, hop } = this.settings.burst;
-    this.ground.burst(pad.x, pad.z, radius, speed, hop);
+    this.parts.ground.burst(pad.x, pad.z, radius, speed, hop);
   }
 }

@@ -23,6 +23,9 @@ import { Bucket } from '../tractor/Bucket';
 import { TractorModel } from '../tractor/TractorModel';
 import { TractorView } from '../tractor/TractorView';
 import { CoinHud } from '../ui/CoinHud';
+import { FinaleView } from '../ui/FinaleView';
+import { Gate } from '../world/Gate';
+import { GateView } from '../world/GateView';
 import type { ObstacleGrid } from '../world/ObstacleGrid';
 import { buildObstacleGrid } from '../world/StaticBlocker';
 
@@ -39,7 +42,8 @@ function yawOf(node: Node): number {
 /**
  * Composition root: creates the models, wires them to the scene's views and drives the frame in a
  * fixed order (update: input, then tractor -> scoop -> balls -> carry -> shredder in steps of at most
- * Config.time.maxStep, then the coins in the air, then the pay pads; lateUpdate: views and camera).
+ * Config.time.maxStep, then the coins in the air, then the gate, then the pay pads; lateUpdate: views
+ * and camera).
  * The only place that knows every system (Unity analogy: a bootstrap MonoBehaviour).
  */
 @ccclass('GameRoot')
@@ -77,6 +81,12 @@ export class GameRoot extends Component {
   @property({ type: PayPadView, tooltip: 'The price sign over the gate (shows the gate pad).' })
   gateSignView: PayPadView | null = null;
 
+  @property({ type: GateView, tooltip: 'The force-field curtain in the gateway.' })
+  gateView: GateView | null = null;
+
+  @property({ type: FinaleView, tooltip: 'The title and the confetti of the end (under Canvas/Hud).' })
+  finaleView: FinaleView | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -88,13 +98,15 @@ export class GameRoot extends Component {
   private purse!: Purse;
   private coins!: CoinFlights;
   private progression!: Progression;
+  private gate!: Gate;
   private camera!: CameraRigModel;
 
   protected onLoad(): void {
-    const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView } = this;
+    const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
+      gateView, finaleView } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -136,7 +148,12 @@ export class GameRoot extends Component {
       Config.coinFx, this.events, { shown: true, plate: gatePlate });
     this.balls.addClearZone(upgradePad.clearZone);
     this.balls.addClearZone(gatePad.clearZone);
-    this.progression = new Progression(Config.pads, upgradePad, gatePad, this.balls, this.tractor, this.events);
+    // Paying the gate ends the run: the controls go off (the drive command and the joystick), the gate opens.
+    this.gate = new Gate('gate', Config.gate, this.events);
+    const controls = { lock: () => { this.moveInput.lock(); this.joystick.disable(); } };
+    this.progression = new Progression(Config.pads, upgradePad, gatePad,
+      { ground: this.balls, machine: this.tractor, controls, gate: this.gate }, this.events);
+    this.events.on('gateOpening', () => finaleView.play());
 
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
@@ -150,6 +167,7 @@ export class GameRoot extends Component {
     shredderView.render(this.shredder);
     coinHud.show(this.purse.total, false);
     this.renderPads();
+    gateView.render(this.gate, 0);
 
     exposeForQa({
       config: Config,
@@ -165,6 +183,9 @@ export class GameRoot extends Component {
       coins: this.coins,
       progression: this.progression,
       pads: { upgrade: upgradePad, gate: gatePad },
+      gate: this.gate,
+      gateView,
+      finaleView,
       ballView,
       coinHud,
       tractorView,
@@ -190,6 +211,8 @@ export class GameRoot extends Component {
       this.shredder.step(step);
     }
     this.coins.update(frame);
+    // The gate before the pads: a gate opened by this frame's payment starts counting next frame.
+    this.gate.step(frame);
     // Pads take from the purse after this frame's coins have arrived in it.
     this.progression.step(frame);
   }
@@ -203,6 +226,7 @@ export class GameRoot extends Component {
     this.ballView!.render(this.balls, this.bucket);
     this.shredderView!.render(this.shredder);
     this.renderPads();
+    this.gateView!.render(this.gate, step);
     // The ball view has redrawn this frame's moved (flying, removed) and carried balls.
     this.balls.clearMoved();
     this.bucket.clearMoved();

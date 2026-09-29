@@ -24,8 +24,9 @@ const SUPERSAMPLE = 4;
 
 /**
  * name -> { out (project path without extension), chars, family, bold, size (px), lineHeight (px),
- * fill, outline { color, width (px, as Label.outlineWidth) }, columns }. The glyphs' ink is centred
- * in the line, so a centred Label puts the digits in the middle of its box.
+ * fill, gradient? [top, bottom] (overrides fill: a vertical gradient over the line's ink), outline
+ * { color, width (px, as Label.outlineWidth) }, columns }. The glyphs' ink is centred in the line, so
+ * a centred Label puts the digits in the middle of its box.
  */
 const FONTS = {
   // Every changing number: the HUD coin counter (what CoinHud's Label drew as Arial bold 100, outline 5)
@@ -34,6 +35,12 @@ const FONTS = {
   'hud-digits': {
     out: 'assets/fonts/hud-digits', chars: '0123456789MAX', family: 'Arial', bold: true, size: 100, lineHeight: 100,
     fill: '#ffffff', outline: { color: '#000000', width: 5 }, columns: 5,
+  },
+  // The finale's title "GATE OPEN!" (M10): gold with a dark purple outline. Static text, but a bitmap
+  // font keeps it in the UI's one batch (a system-font Label would add its own texture and 2 draw calls).
+  'finale-title': {
+    out: 'assets/fonts/finale-title', chars: 'GATEOPN! ', family: 'Arial', bold: true, size: 150, lineHeight: 150,
+    fill: '#ffc41f', gradient: ['#fff6b0', '#ffae00'], outline: { color: '#3f1466', width: 10 }, columns: 3,
   },
 };
 
@@ -59,6 +66,12 @@ const DRAW = (spec) => `(() => {
   ctx.lineWidth = 2 * spec.outline.width; ctx.strokeStyle = spec.outline.color; ctx.fillStyle = spec.fill;
   const cells = glyphs.map((g, k) => {
     const x = (k % cols) * cellW, y = Math.floor(k / cols) * cellH, lead = Math.ceil(pad + g.left);
+    if (spec.gradient) {
+      const shade = ctx.createLinearGradient(0, y + top - ascent, 0, y + top + descent);
+      shade.addColorStop(0, spec.gradient[0]);
+      shade.addColorStop(1, spec.gradient[1]);
+      ctx.fillStyle = shade;
+    }
     ctx.strokeText(g.ch, x + lead, y + top);
     ctx.fillText(g.ch, x + lead, y + top);
     return { id: g.ch.codePointAt(0), x, y, width: widths[k], height, xoffset: -lead, advance: g.advance };
