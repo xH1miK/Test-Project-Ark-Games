@@ -355,8 +355,8 @@ export default async function balls(t) {
   await shot('t1-rest');
   const t1 = await since(m1);
 
-  // 4. Tier 2: bigger boxes, 8.4 u/s (the Tractor2 model itself comes with the progression stage).
-  await t.evaluate('__zm.tractor.setTier(__zm.config.tractor.tiers[1])');
+  // 4. Tier 2: bigger boxes, 8.4 u/s (a QA shortcut: in the game the upgrade pad buys it; scenario upgrade).
+  await t.evaluate('__zm.tractor.setTier(2)');
   const m2 = await mark();
   await runLegs(t, 'T2', ROUTE_T2.slice(0, 2));
   await shot('t2-plough');

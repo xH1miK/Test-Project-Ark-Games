@@ -34,6 +34,8 @@ export interface BucketShape {
   /** Inner floor and the top of the back wall. */
   readonly floor: number;
   readonly rim: number;
+  /** Radius of the rounded edge between the floor and the back wall (0 = a sharp corner). */
+  readonly backRound: number;
 }
 
 /** Stats of one tractor tier. Tier 1 is index 0. */
@@ -88,7 +90,7 @@ export const Config = {
         // Measured on the mesh: inner side walls at ±0.67..0.69, floor plate ~0.06, teeth tips at z 1.875;
         // the back wall is a curve (z 1.1 at mid height, 1.45 at the floor), so a ball centre stays at
         // z >= ~1.44 -> the wall plane at 1.16. The back is 0.75 high, the sides slope down to 0.15 at the lip.
-        bucket: { halfX: 0.68, minZ: 1.16, maxZ: 1.875, floor: 0.07, rim: 0.75 },
+        bucket: { halfX: 0.68, minZ: 1.16, maxZ: 1.875, floor: 0.07, rim: 0.75, backRound: 0 },
         pusher: [
           { halfX: 0.85, minZ: -0.77, maxZ: 1.03, top: 1.3, shut: PusherFace.Front }, // body
           // Bucket: always solid, as high as a full heap (rim + 2 layers); while there is room the
@@ -96,16 +98,24 @@ export const Config = {
           { halfX: 0.74, minZ: 1.03, maxZ: 1.88, top: 1.85, shut: PusherFace.Back },
         ],
       },
-      // Tractor2 (sizes from the example): bodyOffset and the bucket to be measured when its model goes in (progression stage).
+      // Tractor2 at the scene's scale 1.2 (as the example's) spans z -1.37..3.32 around its pivot, half
+      // width 1.7 (the bucket); the body behind the bucket ±1.58 up to 3.0, the tracks ±1.51.
+      // Measured on the mesh (tools/measure-tractor.mjs): a ball fits down to the floor plate at 0.14,
+      // between side walls at ±1.58, the teeth tips at z 3.32 (the plate's edge 3.0-3.06); the back
+      // wall is a curve: the second layer touches it at 2.05, a floor ball only at 2.32 -> the wall
+      // plane at 2.05 with the floor edge rounded by 0.54. The back is 1.4 high, the sides slope down
+      // to 0.18 at the lip.
       {
-        speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0,
-        bucket: { halfX: 1.57, minZ: 1.95, maxZ: 3.07, floor: 0.05, rim: 1.4 },
+        speed: 8.4, bucketCapacity: 60, bodyRadius: 1.8, bodyOffset: 0.97,
+        bucket: { halfX: 1.58, minZ: 2.05, maxZ: 3.32, floor: 0.14, rim: 1.4, backRound: 0.54 },
         pusher: [
-          { halfX: 1.5, minZ: -1.37, maxZ: 1.82, top: 3, shut: PusherFace.Front },
-          { halfX: 1.7, minZ: 1.82, maxZ: 3.07, top: 2.5, shut: PusherFace.Back },
+          { halfX: 1.58, minZ: -1.37, maxZ: 1.88, top: 3, shut: PusherFace.Front },
+          { halfX: 1.7, minZ: 1.88, maxZ: 3.32, top: 2.5, shut: PusherFace.Back },
         ],
       },
     ] as readonly TractorTierConfig[],
+    /** A new tier's model swells from `from` of its size to full over `time` seconds (backOut). */
+    swell: { from: 0.55, time: 0.35 },
     /** Maximum turn rate, degrees/s. */
     turnSpeed: 240,
     /** Acceleration and braking, units/s². */

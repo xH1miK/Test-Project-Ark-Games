@@ -26,7 +26,7 @@ function openShredder({ n = 8, at = { x: 6, z: 0 } } = {}) {
     get count() { return carried.length; },
     unloadAll(out) { out.set(carried); const m = carried.length; carried.length = 0; return m; },
   };
-  const visitor = { x: at.x, z: at.z };
+  const visitor = { bodyX: at.x, bodyZ: at.z };
   const events = new EventBus();
   const heard = { shredded: [], earned: [] };
   events.on('ballsShredded', (e) => heard.shredded.push(e.count));
@@ -42,15 +42,15 @@ test('hand-in: only while the visitor stands in the square zone, and the whole l
   const { field, load, visitor, shredder, carried } = openShredder();
   // Just outside each side of the square: nothing is taken.
   for (const [x, z] of [[zoneHalf + 0.01, 0], [-zoneHalf - 0.01, 1], [1, zoneHalf + 0.01], [-2, -zoneHalf - 0.01], [zoneHalf + 0.01, zoneHalf + 0.01]]) {
-    visitor.x = x;
-    visitor.z = z;
+    visitor.bodyX = x;
+    visitor.bodyZ = z;
     shredder.step(1 / 60);
     assert.equal(load.count, 8, `outside at (${x}, ${z})`);
     assert.ok(!shredder.inZone);
   }
   // A corner of the square counts as inside: the whole load flies in one step.
-  visitor.x = zoneHalf;
-  visitor.z = -zoneHalf;
+  visitor.bodyX = zoneHalf;
+  visitor.bodyZ = -zoneHalf;
   assert.ok(shredder.inZone);
   shredder.step(1 / 60);
   assert.equal(load.count, 0);
@@ -61,7 +61,7 @@ test('hand-in: only while the visitor stands in the square zone, and the whole l
 
 test('the load flies in arcs into the shredder: on time, 2 coins per ball as each lands, then gone', () => {
   const { field, visitor, shredder, heard, carried } = openShredder();
-  visitor.x = 2;
+  visitor.bodyX = 2;
   const start = carried.map((i) => ({ x: field.x[i], y: field.y[i], z: field.z[i] }));
   const peak = carried.map(() => -Infinity);
   const last = carried.map(() => null);
@@ -101,7 +101,7 @@ test('the load flies in arcs into the shredder: on time, 2 coins per ball as eac
 
 test('the throat swallows free balls inside its box (shredder axes, up to its height) and pays for them', () => {
   const { field, visitor, shredder, heard } = openShredder({ n: 0 });
-  visitor.x = 15; // no load anyway
+  visitor.bodyX = 15; // no load anyway
   const top = POSE.y + throat.height;
   const spots = {
     inside: [[throat.halfX - 0.05, 0, R], [0, throat.halfZ - 0.05, R], [-(throat.halfX - 0.1), -(throat.halfZ - 0.1), R], [0.5, 0.5, top - 0.01]],
@@ -133,7 +133,7 @@ test('rollers: spin up while fed, keep turning a while after the last ball, then
   const { visitor, shredder } = openShredder({ n: 3 });
   const dt = 1 / 60;
   assert.equal(shredder.rollerSpeed, 0);
-  visitor.x = 2;
+  visitor.bodyX = 2;
   const speeds = [];
   const angles = [];
   for (let f = 0; f < 150; f++) {
@@ -176,11 +176,11 @@ test('the real arena: fill the bucket, drive into the zone, the purse gets 2 per
     const before = bucket.count;
     frame(world, 1 / 60, s.x, s.z);
     if (entered === null && shredder.handedIn > 0) {
-      entered = { z: world.tractor.z, before, after: bucket.count, inZone: shredder.inZone };
+      entered = { z: world.tractor.bodyZ, before, after: bucket.count, inZone: shredder.inZone };
     }
   }
   assert.ok(entered, 'handed in');
-  assert.ok(entered.inZone && entered.z >= SHREDDER_POSE.z - zoneHalf - 1e-9 && entered.z < SHREDDER_POSE.z - zoneHalf + 0.1, `taken as the pivot crossed into the zone (z ${entered.z})`);
+  assert.ok(entered.inZone && entered.z >= SHREDDER_POSE.z - zoneHalf - 1e-9 && entered.z < SHREDDER_POSE.z - zoneHalf + 0.1, `taken as the body crossed into the zone (z ${entered.z})`);
   assert.equal(entered.after, 0, 'the whole load at once');
   idle(1.5);
   const shredded = shredder.shredded;
@@ -214,7 +214,7 @@ test('a full bucket shoves the carpet into the throat: those balls pay 2 each to
   drive([[11, -8], [12, -1.9]]);
   const zoneEdge = SHREDDER_POSE.x + zoneHalf;
   let f = 0;
-  while (world.tractor.x > zoneEdge + 0.5 && f++ < 900) frame(world, 1 / 60, -1, 0);
+  while (world.tractor.bodyX > zoneEdge + 0.5 && f++ < 900) frame(world, 1 / 60, -1, 0);
   for (let k = 0; k < 90; k++) frame(world, 1 / 60, 0, 0);
   assert.equal(shredder.handedIn, 0, 'never in the zone');
   assert.equal(bucket.count, 8, 'still full');

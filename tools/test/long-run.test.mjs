@@ -1,20 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Config } from '../../assets/scripts/core/Config.ts';
 import { PHASES } from '../scenarios/lib/sweep.mjs';
 import { accountHeld, frame, longRun, makeWorld, measure } from './ball-world.mjs';
 
 // The browser `long-run` scenario's rounds on the pure models, at 30 fps (a phone that cannot hold 60).
-test('long run: tier 1 then tier 2 sweep most of the carpet into the shredder, every ball paid exactly once', () => {
-  const world = makeWorld({ shredder: true });
-  const { balls, shredder, purse, coins } = world;
+test('long run: tier 1, the upgrade bought on the pad, tier 2: most of the carpet into the shredder, every ball paid exactly once', () => {
+  const world = makeWorld({ shredder: true, pads: true });
+  const { balls, shredder, purse, coins, pads, tractor } = world;
   const total = balls.count;
   const problems = [];
+  const ledger = () => purse.total + coins.pending + pads.upgrade.stored + pads.upgrade.inFlight + pads.gate.stored + pads.gate.inFlight;
   const rounds = longRun(world, () => 1 / 30, (r) => {
-    const capacity = Config.tractor.tiers[PHASES[r.phase].tier].bucketCapacity;
-    if (r.fill.reason !== 'full' || r.filled !== capacity) problems.push(`round ${r.round}: fill ended ${r.fill.reason} with ${r.filled}`);
-    if (r.sell.reason !== 'inZone' || r.sold !== capacity) problems.push(`round ${r.round}: sell ended ${r.sell.reason}, sold ${r.sold} of ${capacity}`);
-    if (purse.total + coins.pending !== 2 * shredder.shredded) problems.push(`round ${r.round}: purse ${purse.total} + ${coins.pending} vs 2 x ${shredder.shredded}`);
+    // A full bucket at the end of the fill-up (tier 2 may come half way) is handed in whole.
+    if (r.fill.reason !== 'full' || r.filled !== r.capacity) problems.push(`round ${r.round}: fill ended ${r.fill.reason} with ${r.filled} of ${r.capacity}`);
+    if (r.sell.reason !== 'inZone' || r.sold !== r.filled) problems.push(`round ${r.round}: sell ended ${r.sell.reason}, sold ${r.sold} of ${r.filled}`);
+    if (ledger() !== 2 * shredder.shredded) problems.push(`round ${r.round}: purse ${purse.total} + ${coins.pending} + pads vs 2 x ${shredder.shredded}`);
     const held = accountHeld(world);
     if (held.stray || held.twice) problems.push(`round ${r.round}: ${held.stray} stray, ${held.twice} held twice`);
   });
@@ -24,13 +24,18 @@ test('long run: tier 1 then tier 2 sweep most of the carpet into the shredder, e
     balls.clearMoved();
   }
   const phases = PHASES.map((_, k) => rounds.filter((r) => r.phase === k).length);
-  console.log(`long run: ${phases.join(' + ')} rounds, shredded ${shredder.shredded} of ${total} (throat ${shredder.swallowed}), purse ${purse.total}`);
+  const { upgrade } = rounds;
+  console.log(`long run: ${phases.join(' + ')} rounds, tier 2 from round ${upgrade.round} (${upgrade.onTheWay ? 'bought on the way' : 'drove onto the pad'}), ` +
+    `shredded ${shredder.shredded} of ${total} (throat ${shredder.swallowed}), purse ${purse.total}, upgrade pad ${pads.upgrade.stored}`);
   assert.deepEqual(problems, []);
-  assert.ok(phases[0] >= 20 && phases[1] >= 5, `both phases ran several rounds (${phases.join(', ')})`);
+  assert.equal(tractor.tier, 2, 'tier 2 bought');
+  assert.ok(pads.upgrade.paid && pads.upgrade.closed);
+  assert.ok(upgrade.legs.every((l) => l.ok), JSON.stringify(upgrade.legs));
+  assert.ok(phases[0] >= 5 && phases[1] >= 5, `both phases ran several rounds (${phases.join(', ')})`);
   assert.ok(shredder.shredded >= PHASES[PHASES.length - 1].share * total, `the carpet was swept down to the last phase's share (${shredder.shredded} of ${total})`);
   assert.equal(shredder.inFlight, 0);
   assert.equal(coins.pending, 0);
-  assert.equal(purse.total, 2 * shredder.shredded);
+  assert.equal(ledger(), 2 * shredder.shredded);
   const held = accountHeld(world);
   assert.equal(held.held, held.removed);
   assert.equal(held.removed, shredder.shredded);

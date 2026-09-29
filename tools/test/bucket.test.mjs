@@ -181,7 +181,7 @@ test('upgrade: the bucket follows the tractor tier (T2: 60 balls) and keeps its 
   drive(world, INTO_CARPET);
   assert.equal(world.bucket.count, 8);
   const carried = Array.from(world.bucket.index.subarray(0, 8));
-  world.tractor.setTier(T2);
+  world.tractor.setTier(2);
   frame(world, 1 / 60, 0, 0);
   assert.equal(world.bucket.capacity, 60);
   assert.deepEqual(Array.from(world.bucket.index.subarray(0, 8)), carried, 'same balls');
@@ -222,7 +222,7 @@ test('a smaller bucket drops what it cannot hold back into the field', () => {
   drive(world, INTO_CARPET);
   const before = world.bucket.count;
   assert.ok(before > 8, `T2 took ${before}`);
-  world.tractor.setTier(T1);
+  world.tractor.setTier(1);
   frame(world, 1 / 60, 0, 0);
   assert.equal(world.bucket.count, 8);
   assert.equal(world.balls.heldCount, 8, `${before - 8} balls went back to the field`);

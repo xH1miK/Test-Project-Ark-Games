@@ -101,7 +101,7 @@ export class GameRoot extends Component {
     this.joystick = new JoystickModel(Config.joystick);
     this.moveInput = new MoveInput();
 
-    this.tractor = new TractorModel(Config.tractor, Config.tractor.tiers[0], this.obstacles);
+    this.tractor = new TractorModel(Config.tractor, Config.tractor.tiers, this.obstacles, this.events);
     this.tractor.place(startSpot.worldPosition.x, startSpot.worldPosition.z, yawOf(startSpot));
 
     // Pad plates on the ground; the gate's is there from the start, so the carpet leaves it bare (ball
@@ -136,7 +136,7 @@ export class GameRoot extends Component {
       Config.coinFx, this.events, { shown: true, plate: gatePlate });
     this.balls.addClearZone(upgradePad.clearZone);
     this.balls.addClearZone(gatePad.clearZone);
-    this.progression = new Progression(Config.pads, upgradePad, gatePad, this.balls, this.events);
+    this.progression = new Progression(Config.pads, upgradePad, gatePad, this.balls, this.tractor, this.events);
 
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
@@ -167,6 +167,7 @@ export class GameRoot extends Component {
       pads: { upgrade: upgradePad, gate: gatePad },
       ballView,
       coinHud,
+      tractorView,
       camera: this.camera,
     });
   }

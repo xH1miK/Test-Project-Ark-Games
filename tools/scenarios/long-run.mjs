@@ -1,9 +1,11 @@
 // Long run (M7): the core loop over most of the carpet, the way a player would play it. Rounds of
 // "fill up near the next point of a tour round the carpet, then drive into the shredder's zone"
 // (lib/sweep.mjs; tools/bench/long-run.mjs replays the same rounds in Node): tier 1 until 35% of the
-// carpet is shredded, then tier 2 with loads of 60 until 70% (Tractor1's model with tier 2's stats and
-// camera zoom; Tractor2 comes with the progression stage). Every round must fill the bucket and sell
-// the whole load as the pivot enters the zone; the core loop's invariants hold on every frame and
+// carpet is shredded, then tier 2 with loads of 60 until 70%. Tier 2 is bought on the upgrade pad (M9):
+// the tour crosses it, so it is usually bought on the way as soon as the purse holds the price (the
+// tier-1 phase then ends early); else the tractor drives onto the pad first. Every round must fill the
+// bucket (to the capacity at the end of the fill-up: the tier can change half way) and sell the whole
+// load as the body enters the zone; the core loop's invariants hold on every frame and
 // shredder step (lib/loop-probe.mjs). Measured per phase: FPS (2-second windows), the ball step (per
 // step and per frame), draw calls, ball-buffer uploads per frame, balls simulated; the live JS heap
 // after a full GC every 8 rounds (it must not grow). At the end: no uploads at rest, FPS with and
@@ -16,7 +18,7 @@
 import { driveLegs, installAutopilot } from './lib/autopilot.mjs';
 import { FPS } from './lib/camera.mjs';
 import { checkLoopProbe, installLoopProbe, loopState, settleCoins } from './lib/loop-probe.mjs';
-import { PHASES, pickFillTarget, roundLegs, sweepFrame } from './lib/sweep.mjs';
+import { PHASES, pickFillTarget, roundLegs, sweepFrame, upgradeLegs } from './lib/sweep.mjs';
 
 /** Desktop budget for one ball step (as the balls scenario): SwiftShader shares the CPU, hence the margin. */
 const STEP_BUDGET_MS = 2.5;
@@ -141,28 +143,48 @@ export default async function longRun(t) {
   await overview(t, 'carpet-before');
   await checkpoint('start');
 
+  // Tier 2 is bought on the upgrade pad (usually on the way: the tour crosses it); the tractor
+  // announces it. `upgraded` ends the legs that drive onto the pad for it.
+  await t.evaluate(`(() => {
+    const up = window.__upgrade = { tiers: [], clock: -1 };
+    __zm.events.on('tierChanged', ({ tier }) => { up.tiers.push(tier); if (up.clock < 0) up.clock = __ap.clock; });
+    __ap.until.upgraded = () => __zm.tractor.tier >= 2;
+  })()`);
   let round = 0;
+  let upgrade = null;
   const failed = [];
   const summaries = {};
-  for (const phase of phases) {
-    if (phase.tier > 0) {
-      await t.evaluate(`(() => { __zm.tractor.setTier(__zm.config.tractor.tiers[${phase.tier}]); __zm.events.emit('tierChanged', { tier: ${phase.tier + 1} }); })()`);
+  for (const [index, phase] of phases.entries()) {
+    const tierNow = await t.evaluate('__zm.tractor.tier');
+    if (index > 0 && !upgrade && tierNow >= phase.tier + 1) upgrade = { round, onTheWay: true, legs: [] };
+    if (tierNow < phase.tier + 1) {
+      const from = await t.evaluate('({ x: __zm.tractor.x, z: __zm.tractor.z })');
+      const pad = await t.evaluate('({ x: __zm.pads.upgrade.x, z: __zm.pads.upgrade.z })');
+      const legs = await driveLegs(t, upgradeLegs(from, shredder, pad), 60000);
+      upgrade = { round, onTheWay: false, legs };
+      t.log(`${phase.name}: not bought on the way, drove onto the pad: ${legs.map((l) => `${l.name} -> ${l.reason} in ${l.t}s`).join('; ')}`);
     }
     await t.evaluate(`__runMetrics.begin('${phase.name}')`);
-    // The bucket takes up the new tier's capacity on its next step: read it from the tier.
-    const capacity = await t.evaluate(`__zm.config.tractor.tiers[${phase.tier}].bucketCapacity`);
     const sold = [];
     for (let k = 0; k < phase.maxRounds; k++, round++) {
       const s = await loopState(t);
       if (s.shredded + s.inFlight >= phase.share * total) break;
-      const [fill, sell] = await driveLegs(t, roundLegs(round, phase.tier, shredder), 150000);
+      // A phase ends when the tractor has moved on to another tier (bought on the way).
+      const tier = await t.evaluate('__zm.tractor.tier');
+      if (index < phases.length - 1 && tier !== phase.tier + 1) {
+        upgrade ??= { round, onTheWay: true, legs: [] };
+        t.log(`${phase.name}: tier ${tier} bought on the way (round ${round - 1})`);
+        break;
+      }
+      const [fill, sell] = await driveLegs(t, roundLegs(round, tier - 1, shredder), 150000);
       const now = await loopState(t);
       sold.push(sell.sold);
-      // The load goes whole in the step the pivot enters the zone (the probe checks every step), and the
-      // bucket cannot lose balls on the way: a full bucket at the end of the fill-up is a full hand-in. The
-      // sell leg ends with the frame, so at low FPS it also counts what the bucket scooped in the zone in
-      // that frame's later steps (sold in turn, as in the example): sold >= the load.
-      const ok = fill.ok && fill.reason === 'full' && fill.load === capacity && sell.ok && sell.reason === 'inZone' && sell.sold >= capacity;
+      // The load goes whole in the step the body enters the zone (the probe checks every step), and the
+      // bucket cannot lose balls on the way: a full bucket at the end of the fill-up is a full hand-in
+      // (tier 2 may come half way: full = the capacity then). The sell leg ends with the frame, so at low
+      // FPS it also counts what the bucket scooped in the zone in that frame's later steps (sold in
+      // turn, as in the example): sold >= the load.
+      const ok = fill.ok && fill.reason === 'full' && fill.load === fill.capacity && sell.ok && sell.reason === 'inZone' && sell.sold >= fill.load;
       if (!ok) failed.push(round);
       t.log(`${phase.name} round ${String(round).padStart(2)}: ${fill.name} -> ${fill.reason} in ${fill.t}s (${fill.picks} picks), ${fill.load} in the bucket; ` +
         `sold ${sell.sold} after ${sell.t}s at (${sell.x}, ${sell.z}); shredded ${now.shredded} (${Math.round((100 * now.shredded) / total)}%), purse ${now.purse}${ok ? '' : '  <-- not a full load sold whole'}`);
@@ -195,7 +217,7 @@ export default async function longRun(t) {
   // Verdict.
   for (const phase of phases) {
     const s = summaries[phase.name];
-    t.log(`${phase.name}: ${s.rounds} rounds, sold as the pivot entered the zone ${s.sold.join(' ')}; ${s.frames} frames, fps ${s.fpsMean.toFixed(1)} mean / ${s.fpsMin.toFixed(1)} worst 2-s window; ` +
+    t.log(`${phase.name}: ${s.rounds} rounds, sold as the body entered the zone ${s.sold.join(' ')}; ${s.frames} frames, fps ${s.fpsMean.toFixed(1)} mean / ${s.fpsMin.toFixed(1)} worst 2-s window; ` +
       `ball step ${s.stepMean.toFixed(3)} ms mean, ${s.stepP95.toFixed(2)} p95, ${s.stepMax.toFixed(2)} max over ${s.steps} steps (per frame ${s.frameMean.toFixed(3)} / ${s.frameP95.toFixed(2)} / ${s.frameMax.toFixed(2)}); ` +
       `simulated ${s.simMean.toFixed(0)} mean, ${s.simMax} max; draw calls ${s.drawMin}..${s.drawMax} (mostly ${s.drawMode}, mean ${s.drawMean.toFixed(1)}); ` +
       `ball buffer uploaded in ${s.uploads} of ${s.frames} frames (at most ${s.uploadMax} a frame)`);
@@ -204,6 +226,10 @@ export default async function longRun(t) {
     t.check(s.uploadMax <= 1, `${phase.name}: the ball buffer is uploaded at most once a frame`);
   }
   t.check(failed.length === 0, `every round filled the bucket and sold the full load as it entered the zone${failed.length ? ` (not: rounds ${failed.join(', ')})` : ''}`);
+  const up = await t.evaluate('({ tiers: window.__upgrade.tiers, clock: window.__upgrade.clock, tier: __zm.tractor.tier, paid: __zm.pads.upgrade.paid, closed: __zm.pads.upgrade.closed })');
+  t.log(`tier 2 from round ${upgrade ? upgrade.round : '?'} (${upgrade && !upgrade.onTheWay ? 'drove onto the pad' : 'bought on the way'}) at ${up.clock.toFixed(1)} s of game time; tierChanged ${JSON.stringify(up.tiers)}`);
+  t.check(up.tier === 2 && up.paid && up.closed && up.tiers.length === 1 && up.tiers[0] === 2, 'tier 2 bought once, on the upgrade pad (tierChanged 2; the pad paid and closed)');
+  t.check(!upgrade || upgrade.legs.every((l) => l.ok), `the drive onto the pad went through (${JSON.stringify(upgrade && upgrade.legs)})`);
   const last = phases[phases.length - 1];
   t.log(`end: shredded ${end.shredded} of ${total} (${Math.round((100 * end.shredded) / total)}%; handed in ${end.handed}, throat ${end.swallowed}), purse ${end.purse}; ` +
     `at rest: ${idleUploads} uploads in 30 frames, ${drawsAtRest} draw calls, fps ${fpsOn.toFixed(1)} with the balls / ${fpsOff.toFixed(1)} without`);

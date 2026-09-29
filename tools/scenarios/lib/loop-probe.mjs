@@ -1,6 +1,6 @@
 // The core loop's invariants, watched in the page on every frame and every shredder step (scenarios
-// core-loop and long-run). Per shredder step: a load is taken only while the tractor's pivot is in
-// the square zone, and all of it at once; throat balls are counted by where the tractor was. Per frame
+// core-loop and long-run). Per shredder step: a load is taken only while the tractor's body (the
+// centre of its collision circle) is in the square zone, and all of it at once; throat balls are counted by where the tractor was. Per frame
 // (after lateUpdate, so the views have drawn): every shredded ball paid exactly 2 (purse + coins still
 // in the air + coins on the pay pads or flying to them = 2 x shredded + coins a scenario granted with
 // grantCoins), the HUD shows the purse, every held ball is exactly one of carried /
@@ -22,12 +22,12 @@ export const LOOP_PROBE = `(() => {
     drawnOff: 0, syncOff: 0, syncChecks: 0, hiddenWrong: 0, maxPunch: 1, maxRoller: 0, rollerTurned: false, maxInFlight: 0, pauseWhen: null, paused: false };
   zm.events.on('ballsShredded', (e) => { p.shreddedEvents += e.count; });
   zm.events.on('coinsEarned', (e) => { p.earned += e.amount; });
-  // Per shredder step: where the tractor's pivot was when a load went or the throat swallowed.
+  // Per shredder step: where the tractor's body was when a load went or the throat swallowed.
   const step = sh.step.bind(sh);
   sh.step = (dt) => {
     const handed = sh.handedIn, swallowed = sh.swallowed, load = bucket.count;
     step(dt);
-    const dx = tr.x - pose.x, dz = tr.z - pose.z, inZone = Math.abs(dx) <= half + 1e-9 && Math.abs(dz) <= half + 1e-9;
+    const dx = tr.bodyX - pose.x, dz = tr.bodyZ - pose.z, inZone = Math.abs(dx) <= half + 1e-9 && Math.abs(dz) <= half + 1e-9;
     if (sh.handedIn > handed) {
       p.handInCount++;
       if (p.handIns.length < HAND_IN_LOG) {

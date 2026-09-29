@@ -263,7 +263,8 @@ export class BucketLoad {
 
   /**
    * Keeps ball k inside the cavity, give or take its slack: on the floor, between the side walls,
-   * between the back wall and the lip. Above the heap's top the walls close in (a mound).
+   * between the back wall and the lip, off the rounded edge between the floor and the back. Above the
+   * heap's top the walls close in (a mound).
    */
   private contain(k: number): void {
     const { x, y, z } = this;
@@ -279,9 +280,24 @@ export class BucketLoad {
     const z0 = s.minZ + r - slack + narrow;
     const z1 = s.maxZ - r + slack - narrow;
     z[k] = z1 <= z0 ? 0.5 * (z0 + z1) : z[k] < z0 ? z0 : z[k] > z1 ? z1 : z[k];
+    // Down in the back corner the centre keeps (round - r) from the rounding's axis. It is held off
+    // the curve horizontally, like off the flat walls: a ball thrown back into the corner stops there
+    // instead of riding up the curve and rolling out again (a closest-point push would be a ramp).
+    const round = s.backRound;
+    if (round <= r) return;
+    const dz = z[k] - (s.minZ + round);
+    const dy = y[k] - (s.floor + round);
+    if (dz >= 0 || dy >= 0) return;
+    const most = round - r + slack;
+    if (dz * dz + dy * dy <= most * most) return;
+    // On or above the floor (clamped above), so |dy| <= most.
+    z[k] = s.minZ + round - Math.sqrt(Math.max(0, most * most - dy * dy));
   }
 
-  /** How far ball k is outside its walls (0 when inside): below the floor, past a side, the back or the lip. */
+  /**
+   * How far ball k is outside its walls (0 when inside): below the floor, past a side, the back or the
+   * lip, or into the rounded back corner.
+   */
   private breach(k: number): number {
     const s = this.cavity;
     const r = this.radius;
@@ -289,6 +305,11 @@ export class BucketLoad {
     out = Math.max(out, Math.abs(this.x[k]) - (s.halfX - r));
     out = Math.max(out, s.minZ + r - this.z[k]);
     out = Math.max(out, this.z[k] - (s.maxZ - r));
+    if (s.backRound > r) {
+      const dz = this.z[k] - (s.minZ + s.backRound);
+      const dy = this.y[k] - (s.floor + s.backRound);
+      if (dz < 0 && dy < 0) out = Math.max(out, Math.sqrt(dz * dz + dy * dy) - (s.backRound - r));
+    }
     return out > 0 ? out : 0;
   }
 }
