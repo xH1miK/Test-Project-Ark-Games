@@ -87,11 +87,16 @@ export default async function drive(t) {
   const cam = await t.evaluate(`(() => { const c = __zm.camera, tr = __zm.tractor, n = cc.find('Main Camera');
     const p = n.worldPosition, e = n.eulerAngles;
     return { lag: Math.hypot(c.focus.x - tr.x, c.focus.z - tr.z), off: [p.x - c.focus.x, p.y - c.focus.y, p.z - c.focus.z],
-             node: Math.hypot(p.x - c.position.x, p.y - c.position.y, p.z - c.position.z), euler: [e.x, e.y, e.z], zoom: c.zoom }; })()`);
+             node: Math.hypot(p.x - c.position.x, p.y - c.position.y, p.z - c.position.z), euler: [e.x, e.y, e.z], zoom: c.zoom, framing: c.framing, aspect: innerWidth / innerHeight, cfg: __zm.config.camera.aspect }; })()`);
   t.log(`camera: lag ${cam.lag.toFixed(4)}, offset (${cam.off.map((v) => v.toFixed(2)).join(', ')}), euler (${cam.euler.map((v) => v.toFixed(1)).join(', ')})`);
   t.check(cam.lag < 0.02, `camera settles on the tractor (lag ${cam.lag.toFixed(4)})`);
-  t.check(Math.abs(cam.off[0] - 17.08) < 1e-3 && Math.abs(cam.off[1] - 24.15) < 1e-3 && Math.abs(cam.off[2] - 17.08) < 1e-3 && cam.node < 1e-3,
-    'camera node at focus + offset (17.08, 24.15, 17.08)');
+  // The framing follows the screen shape: further out on a tall phone, closer on a wide one.
+  const want = Math.min(cam.cfg.max, Math.max(cam.cfg.min, Math.pow(cam.cfg.ref / cam.aspect, cam.cfg.power)));
+  t.log(`framing ${cam.framing.toFixed(3)} for aspect ${cam.aspect.toFixed(3)} (formula ${want.toFixed(3)})`);
+  t.check(Math.abs(cam.framing - want) < 0.01 && (cam.aspect < cam.cfg.ref ? cam.framing > 1 : cam.framing < 1), 'the camera framing follows the screen aspect (out on a tall screen, in on a wide one)');
+  const k = cam.framing;
+  t.check(Math.abs(cam.off[0] - 17.08 * k) < 1e-3 && Math.abs(cam.off[1] - 24.15 * k) < 1e-3 && Math.abs(cam.off[2] - 17.08 * k) < 1e-3 && cam.node < 1e-3,
+    'camera node at focus + offset (17.08, 24.15, 17.08) x the framing');
   t.check(Math.abs(cam.euler[0] + 45) < 0.01 && Math.abs(cam.euler[1] - 45) < 0.01, 'camera pitch -45, yaw 45');
 
   // 3. Ramming: straight into the east wall and along it, the far wall, the shredder, a corner.
@@ -114,8 +119,8 @@ export default async function drive(t) {
   // 4. Tier zoom through the event bus: T2 pulls the camera out x1.2 over 0.5 s, T1 brings it back.
   await t.evaluate(`__zm.events.emit('tierChanged', { tier: 2 })`);
   await gameWait(0.7);
-  const zoomed = await t.evaluate(`(() => { const c = __zm.camera; return { zoom: c.zoom, dy: c.position.y - c.focus.y }; })()`);
-  t.check(Math.abs(zoomed.zoom - 1.2) < 1e-6 && Math.abs(zoomed.dy - 24.15 * 1.2) < 1e-3, `tierChanged 2 zooms the camera out to x1.2 (zoom ${zoomed.zoom.toFixed(3)})`);
+  const zoomed = await t.evaluate(`(() => { const c = __zm.camera; return { zoom: c.zoom, framing: c.framing, dy: c.position.y - c.focus.y }; })()`);
+  t.check(Math.abs(zoomed.zoom - 1.2) < 1e-6 && Math.abs(zoomed.dy - 24.15 * 1.2 * zoomed.framing) < 1e-3, `tierChanged 2 zooms the camera out to x1.2 (zoom ${zoomed.zoom.toFixed(3)})`);
   await t.shot('zoom-t2');
   await t.evaluate(`__zm.events.emit('tierChanged', { tier: 1 })`);
   await gameWait(0.7);

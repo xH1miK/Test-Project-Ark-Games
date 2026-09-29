@@ -1,8 +1,8 @@
-import { _decorator, Camera, Component, Node, Vec3 } from 'cc';
+import { _decorator, Camera, Component, Node, Vec3, screen } from 'cc';
 import { Config } from './Config';
 import { EventBus } from './Events';
 import type { GameEvents } from './Events';
-import { exposeForQa } from './QaBridge';
+import { exposeForQa, qaFlag } from './QaBridge';
 import { layCarpet } from '../balls/BallCarpet';
 import type { CarpetHole } from '../balls/BallCarpet';
 import { BallField } from '../balls/BallField';
@@ -188,13 +188,16 @@ export class GameRoot extends Component {
     this.events.on('tierChanged', ({ tier }) => { if (tier > 1) this.puffs.emit(recipes.upgrade, this.tractor.x, 0, this.tractor.z); });
     this.events.on('gateOpening', () => {
       const at = gateView.node.worldPosition;
+      this.camera.peek(at.x, at.z, Config.camera.peekGate);
       this.puffs.emit(recipes.gate, at.x, at.y + recipes.gate.box[1], at.z + 0.2);
     });
     this.worldCamera = cameraView.getComponent(Camera)!;
     puffRenderer.bind(this.puffs);
 
     this.camera = new CameraRigModel(Config.camera);
+    this.camera.setAspect(screen.windowSize.width / screen.windowSize.height);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
+    if (!qaFlag('nopeek')) this.camera.peek(pose.x, pose.z, Config.camera.peekStart);
     this.events.on('tierChanged', ({ tier }) =>
       this.camera.zoomTo(Math.pow(Config.camera.tierZoom, tier - 1), Config.camera.zoomTime));
 
@@ -272,6 +275,8 @@ export class GameRoot extends Component {
   protected lateUpdate(dt: number): void {
     const step = Math.min(dt, Config.time.maxFrameDt);
     this.tractorView!.render(this.tractor);
+    const { width, height } = screen.windowSize;
+    this.camera.setAspect(width / height);
     this.camera.update(step, this.tractor.x, 0, this.tractor.z);
     this.cameraView!.render(this.camera);
     this.coinFlightView!.render();
@@ -282,6 +287,7 @@ export class GameRoot extends Component {
     this.shredderView!.render(this.shredder);
     this.renderPads();
     const upgradePad = this.progression.upgradePad;
+    if (upgradePad.shown && !this.upgradePadSeen) this.camera.peek(upgradePad.x, upgradePad.z, Config.camera.peekPad);
     if (upgradePad.shown && !this.upgradePadSeen) this.puffs.emit(Config.puffs.recipes.padPop, upgradePad.x, 0, upgradePad.z);
     this.upgradePadSeen = upgradePad.shown;
     this.puffRenderer!.render(this.worldCamera);
