@@ -47,7 +47,7 @@ export class JoystickView extends Component {
     this.knob?.setPosition(model.knob.x, model.knob.y, 0);
     if (this.fade) {
       const idle = Config.joystick.idleOpacity;
-      this.fade.opacity = idle + (255 - idle) * model.engaged;
+      this.fade.opacity = (idle + (255 - idle) * model.engaged) * model.visibility;
     }
   }
 

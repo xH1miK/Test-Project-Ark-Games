@@ -54,6 +54,8 @@ export interface GameEvents {
   coinsSpent: { readonly padId: string; readonly amount: number };
   /** A pay pad received its full price. */
   padPaid: { readonly padId: string };
+  /** The gate started to open (its pad was paid): the run is over, the controls are off. */
+  gateOpening: { readonly padId: string };
   /** The gate finished opening: the end of the run. */
   gateOpened: { readonly padId: string };
 }

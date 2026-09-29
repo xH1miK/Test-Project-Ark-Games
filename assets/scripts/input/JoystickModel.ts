@@ -32,12 +32,15 @@ export class JoystickModel {
   readonly knob: Vec2Like = { x: 0, y: 0 };
   /** 1 while held; fades to 0 as the joystick glides back to rest (the view maps it to opacity). */
   engaged = 0;
+  /** 1 while the joystick is on; fades to 0 after disable() (the view multiplies its opacity by it). */
+  visibility = 1;
 
   private readonly settings: JoystickSettings;
   private readonly rest: Vec2Like = { x: 0, y: 0 };
   private halfWidth = 0;
   private halfHeight = 0;
   private held = false;
+  private enabled = true;
 
   constructor(settings: JoystickSettings) {
     this.settings = settings;
@@ -45,6 +48,16 @@ export class JoystickModel {
 
   get isHeld(): boolean {
     return this.held;
+  }
+
+  get isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  /** Switches the stick off for good (the run is over): the finger is let go, new touches do nothing, the picture fades away. */
+  disable(): void {
+    this.enabled = false;
+    this.release();
   }
 
   /** Size of the touch area (on start and on every resize). A released base jumps to the new rest point. */
@@ -61,6 +74,7 @@ export class JoystickModel {
 
   /** A finger went down at (x, y). Outside the base the base jumps under the finger. */
   press(x: number, y: number): void {
+    if (!this.enabled) return;
     this.held = true;
     this.engaged = 1;
     const dx = x - this.base.x;
@@ -104,6 +118,7 @@ export class JoystickModel {
     if (this.held) return;
     // Exponential approach: about 95% of the way after returnTime.
     const k = 1 - Math.exp((-3 * dt) / Math.max(this.settings.returnTime, 1e-6));
+    if (!this.enabled) this.visibility = this.visibility < 0.004 ? 0 : this.visibility - this.visibility * k;
     this.base.x += (this.rest.x - this.base.x) * k;
     this.base.y += (this.rest.y - this.base.y) * k;
     this.knob.x -= this.knob.x * k;

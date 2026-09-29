@@ -98,8 +98,10 @@ const OVERVIEW = `(() => {
 
 /** The page-side point source of the seek legs (lib/sweep.mjs), with the shredder where the scene has it. */
 async function installSweep(t) {
-  const shredder = await t.evaluate(`(() => { const s = cc.find('Level/Shredder').worldPosition; return { x: s.x, z: s.z, zoneHalf: __zm.config.shredder.zoneHalf }; })()`);
-  const frame = sweepFrame(shredder, shredder.zoneHalf);
+  const shredder = await t.evaluate(`(() => { const s = cc.find('Level/Shredder').worldPosition, g = __zm.pads.gate;
+    return { x: s.x, z: s.z, zoneHalf: __zm.config.shredder.zoneHalf, gate: { x: g.x, z: g.z }, padZoneHalf: __zm.config.pads.zoneHalf }; })()`);
+  // The gate pad's zone is off limits: paying the gate ends the run (M10).
+  const frame = sweepFrame(shredder, shredder.zoneHalf, shredder.gate, shredder.padZoneHalf);
   await t.evaluate(`(() => {
     const pick = ${pickFillTarget}, frame = ${JSON.stringify(frame)}, tabu = window.__sweepTabu = [];
     __ap.targets.balls = (leg, stalled) => {

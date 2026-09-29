@@ -55,12 +55,15 @@ export function roundLegs(round, tier, shredder) {
 
 /**
  * pickFillTarget's options besides the leg's own: the area, the shredder's zone grown by 0.8 (the
- * pivot keeps out of it while filling), the shredder's body (a way out of the zone must not cross it).
+ * pivot keeps out of it while filling), the shredder's body (a way out of the zone must not cross it),
+ * and, given the gate pad, its zone grown by 0.8 as well: paying the gate ends the run, so a round
+ * never sets foot there (`avoid`: no target inside, no straight line across).
  */
-export function sweepFrame(shredder, zoneHalf) {
+export function sweepFrame(shredder, zoneHalf, gatePad = null, padZoneHalf = 0) {
   return {
     area: SWEEP_AREA,
     keepOut: { x: shredder.x, z: shredder.z, half: zoneHalf + 0.8 },
+    avoid: gatePad ? [{ x: gatePad.x, z: gatePad.z, half: padZoneHalf + 0.8 }] : [],
     body: { x: shredder.x, z: shredder.z, half: 2.6 },
     towardShare: 0.25,
     turnCost: 0,
@@ -75,6 +78,7 @@ export function sweepFrame(shredder, zoneHalf) {
  * `o.towardShare` of the distance from the tractor: a tour of such points sweeps the whole carpet) that
  *  - is at least `o.minDistance` away (the bucket is ahead of the pivot: what is under it is taken),
  *  - lies outside `o.keepOut` (the shredder's zone grown by a margin: the pivot must not sell early),
+ *  - lies outside every square of `o.avoid` and is not reached across one (places the run must not enter),
  *  - is not in `o.tabu` (cells the tractor could not get to),
  *  - has room for the tractor (`o.obstacles` free within `o.clearance`, as tractor collision),
  *  - is reached in a straight line that does not cross `o.keepOut` (or, while the tractor is still
@@ -113,6 +117,7 @@ export function pickFillTarget(balls, tractor, o) {
     }
     return true;
   };
+  const avoid = o.avoid || [];
   const wall = inside(tractor.x, tractor.z, o.keepOut) ? o.body : o.keepOut;
   let best = null;
   let bestCost = Infinity;
@@ -130,6 +135,9 @@ export function pickFillTarget(balls, tractor, o) {
       if (distance < o.minDistance || inside(x, z, o.keepOut) || (o.tabu && o.tabu.indexOf(cell) >= 0)) continue;
       if (o.obstacles && o.obstacles.overlapsCircle(x, z, o.clearance, 1)) continue;
       if (crosses(tractor.x, tractor.z, x, z, wall)) continue;
+      let blocked = false;
+      for (let a = 0; a < avoid.length && !blocked; a++) blocked = inside(x, z, avoid[a]) || crosses(tractor.x, tractor.z, x, z, avoid[a]);
+      if (blocked) continue;
       const turn = Math.atan2(x - tractor.x, z - tractor.z) - tractor.yaw;
       const way = o.toward ? Math.hypot(x - o.toward.x, z - o.toward.z) + o.towardShare * distance : distance;
       const cost = way + o.turnCost * Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn)));

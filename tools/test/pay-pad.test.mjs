@@ -193,7 +193,8 @@ test('progression: the upgrade pad hides until the first hand-in, pops up once a
   const upgrade = make('upgrade', 5.65, 2.33, Config.economy.upgradePrice);
   const gate = make('gate', 1.3, -12.2, Config.economy.gatePrice);
   const bursts = [];
-  const progression = new Progression(PADS, upgrade, gate, { burst: (...args) => bursts.push(args) }, tractor, events);
+  const parts = { ground: { burst: (...args) => bursts.push(args) }, machine: tractor, controls: { lock() {} }, gate: { open() {} } };
+  const progression = new Progression(PADS, upgrade, gate, parts, events);
   assert.equal(upgrade.shown, false);
   assert.equal(gate.shown, true);
   events.emit('ballsShredded', { count: 3 }); // balls shoved into the throat are not a hand-in
@@ -204,7 +205,7 @@ test('progression: the upgrade pad hides until the first hand-in, pops up once a
   assert.deepEqual(bursts, [[5.65, 2.33, radius, speed, hop]]);
   events.emit('loadHandedIn', { count: 8 });
   assert.equal(bursts.length, 1, 'once');
-  // Paid: the upgrade pad closes (MAX); the gate pad just takes its coins (the gate opens in M10).
+  // Paid: the upgrade pad closes (MAX); the gate pad takes its coins (what its payment does: see gate.test.mjs).
   purse.add(1000);
   tractor.x = upgrade.x;
   tractor.z = upgrade.z;

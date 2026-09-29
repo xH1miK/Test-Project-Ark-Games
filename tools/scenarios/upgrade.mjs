@@ -184,7 +184,8 @@ export default async function upgrade(t) {
 
   // 3. Tier 2 at work: fill 60 near the carpet's north-west, then into the zone; paused with the full
   // bucket (above, side) and with the load in the air.
-  const frame = sweepFrame(shredder, shredder.zoneHalf);
+  const gatePad = await t.evaluate('({ x: __zm.pads.gate.x, z: __zm.pads.gate.z, half: __zm.config.pads.zoneHalf })');
+  const frame = sweepFrame(shredder, shredder.zoneHalf, gatePad, gatePad.half); // the gate pad's zone ends the run: keep out
   await t.evaluate(`(() => {
     const pick = ${pickFillTarget}, frame = ${JSON.stringify(frame)}, tabu = [];
     __ap.targets.balls = (leg, stalled) => {

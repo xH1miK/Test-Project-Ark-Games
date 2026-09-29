@@ -8,17 +8,33 @@ export class MoveInput {
   x = 0;
   z = 0;
   private overridden = false;
+  private locked = false;
 
   get isOverridden(): boolean {
     return this.overridden;
   }
 
+  /** True once the controls are off for good (the run is over). */
+  get isLocked(): boolean {
+    return this.locked;
+  }
+
+  /**
+   * Switches the controls off for good: the drive command is zero from now on, from the joystick and
+   * from an autopilot alike (the tractor brakes to a stop). This is the only place that does it.
+   */
+  lock(): void {
+    this.locked = true;
+    this.x = 0;
+    this.z = 0;
+  }
+
   /**
    * Stick reading (x right, y up) seen through a camera turned by `cameraYawDeg` about +Y.
-   * Ignored while an override is active.
+   * Ignored while an override is active or the controls are locked.
    */
   setFromStick(stickX: number, stickY: number, cameraYawDeg: number): void {
-    if (this.overridden) return;
+    if (this.overridden || this.locked) return;
     const yaw = (cameraYawDeg * Math.PI) / 180;
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
@@ -30,6 +46,7 @@ export class MoveInput {
   /** Autopilot: drive toward world direction (x, z) until release(); longer than 1 is cut to 1. */
   override(x: number, z: number): void {
     this.overridden = true;
+    if (this.locked) return;
     const length = Math.sqrt(x * x + z * z);
     const scale = length > 1 ? 1 / length : 1;
     this.x = x * scale;

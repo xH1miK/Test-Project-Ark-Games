@@ -12,8 +12,10 @@ import { PayPad } from '../../assets/scripts/economy/PayPad.ts';
 import { Progression } from '../../assets/scripts/economy/Progression.ts';
 import { Purse } from '../../assets/scripts/economy/Purse.ts';
 import { Shredder } from '../../assets/scripts/economy/Shredder.ts';
+import { MoveInput } from '../../assets/scripts/input/MoveInput.ts';
 import { Bucket } from '../../assets/scripts/tractor/Bucket.ts';
 import { TractorModel } from '../../assets/scripts/tractor/TractorModel.ts';
+import { Gate } from '../../assets/scripts/world/Gate.ts';
 import { Blocks, ObstacleGrid } from '../../assets/scripts/world/ObstacleGrid.ts';
 import { PHASES, pickFillTarget, roundLegs, sweepFrame, upgradeLegs } from '../scenarios/lib/sweep.mjs';
 
@@ -62,9 +64,10 @@ export function arenaGrid() {
  * Arena + carpet + tractor on its start spot, and the bucket unless `bucket: false` (then the bucket
  * box only pushes, as before M5). With `shredder: true` also the shredder on its spot, the purse and
  * the coins in the air; with `pads: true` (needs the shredder) also the pay pads on their spots with
- * their plates from the fixture and the progression (the gate's plate is a hole in the carpet): all
- * wired the way GameRoot wires them (an event bus is made if none is given). `settings` overrides
- * Config.balls.
+ * their plates from the fixture, the progression (the gate's plate is a hole in the carpet), the gate and
+ * the drive command (`world.input`, which frame() drives the tractor through, so a bought gate
+ * switches the controls off for a test's autopilot too): all wired the way GameRoot wires them (an
+ * event bus is made if none is given). `settings` overrides Config.balls.
  */
 export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = true, shredder = false, pads = false, events = null } = {}) {
   const grid = arenaGrid();
@@ -84,7 +87,7 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
   const start = LEVEL.spots.tractorStart;
   tractor.place(start.x, start.z, (start.yaw * Math.PI) / 180);
   const scoop = bucket ? new Bucket({ ...BUCKET_SETTINGS, radius: ballSettings.radius, gravity: ballSettings.gravity }, balls, tractor, BUCKET_SLOTS, bus) : null;
-  const world = { grid, balls, tractor, bucket: scoop, settings: ballSettings, events: bus, shredder: null, purse: null, coins: null, pads: null, progression: null };
+  const world = { grid, balls, tractor, bucket: scoop, settings: ballSettings, events: bus, shredder: null, purse: null, coins: null, pads: null, progression: null, input: null, gate: null };
   if (shredder) {
     world.shredder = new Shredder(SHREDDER_SETTINGS, SHREDDER_POSE, balls, scoop, tractor, bus);
     world.purse = new Purse(bus);
@@ -101,16 +104,24 @@ export function makeWorld({ tier = 0, settings = {}, carpet = true, bucket = tru
     balls.addClearZone(upgrade.clearZone);
     balls.addClearZone(gate.clearZone);
     world.pads = { upgrade, gate };
-    world.progression = new Progression(Config.pads, upgrade, gate, balls, tractor, bus);
+    world.input = new MoveInput();
+    world.gate = new Gate('gate', Config.gate, bus);
+    world.progression = new Progression(Config.pads, upgrade, gate, { ground: balls, machine: tractor, controls: world.input, gate: world.gate }, bus);
   }
   return world;
 }
 
 /**
  * One frame the way GameRoot runs it: split into steps of at most Config.time.maxStep (tractor, scoop,
- * balls, carry, shredder), then the coins in the air, then the pay pads.
+ * balls, carry, shredder), then the coins in the air, then the gate, then the pay pads.
  */
 export function frame(world, dt, inputX, inputZ, onStep) {
+  const move = world.input;
+  if (move) {
+    move.override(inputX, inputZ);
+    inputX = move.x;
+    inputZ = move.z;
+  }
   const steps = Math.ceil(dt / Config.time.maxStep - 1e-9);
   const h = dt / steps;
   for (let s = 0; s < steps; s++) {
@@ -122,6 +133,8 @@ export function frame(world, dt, inputX, inputZ, onStep) {
     onStep?.();
   }
   world.coins?.update(dt);
+  // The gate before the pads: a gate opened by this frame's payment starts counting next frame.
+  world.gate?.step(dt);
   world.progression?.step(dt);
 }
 
@@ -416,7 +429,7 @@ export function longRun(world, nextDt, onRound) {
   let round = 0;
   let upgradedIn = -1;
   world.events.on('tierChanged', () => { if (upgradedIn < 0) upgradedIn = round; });
-  const frameOptions = sweepFrame(SHREDDER_POSE, Config.shredder.zoneHalf);
+  const frameOptions = sweepFrame(SHREDDER_POSE, Config.shredder.zoneHalf, pads.gate, Config.pads.zoneHalf);
   const tabu = [];
   const targets = {
     balls: (leg, stalled) => {

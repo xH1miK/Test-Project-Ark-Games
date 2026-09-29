@@ -306,6 +306,15 @@ export const Config = {
   },
 
   /**
+   * The gate (numbers from the example's force-field curtain): after the gate pad is paid the curtain
+   * in the gateway holds for `hold` of `openTime`, then folds away (see Gate.fold).
+   */
+  gate: {
+    openTime: 0.85,
+    hold: 0.15,
+  },
+
+  /**
    * Coins on their way to the purse (the purse is credited when a coin arrives): a payout flies as up
    * to `spritesPerPayout` coins sharing its amount, each `flightTime` ± jitter seconds; with
    * `maxAlive` coins already in the air a payout is credited at once.
@@ -324,5 +333,38 @@ export const Config = {
     designHeight: 2276,
     /** The coin counter swells to `punchScale` and back over `punchTime` seconds when coins arrive. */
     coinHud: { punchScale: 1.16, punchTime: 0.14 },
+  },
+
+  /**
+   * The finale (the gate was paid): the title pops up (backOut over `pop` s) `height` of the screen
+   * height above the middle and then pulses; confetti fires from the two bottom corners and rains from
+   * the top. All sizes and speeds in UI units of the design frame (1280 x 2276 portrait); the confetti
+   * fills whatever screen the frame is fitted to.
+   */
+  finale: {
+    title: { text: 'GATE OPEN!', pop: 0.45, height: 0.26, pulseScale: 1.05, pulsePeriod: 0.9 },
+    confetti: {
+      count: 64,
+      /** Share fired from the bottom corners (the rest rains from the top over `rainDelay` s). */
+      cannonShare: 0.6,
+      /** Units/s²: a fired piece falls fast, a rain piece drifts. */
+      gravity: 1900,
+      rainGravity: 500,
+      /** Share of speed lost per second. */
+      drag: 0.9,
+      /** Muzzle speed of a fired piece, units/s, and its angle above the horizontal, degrees. */
+      speed: { min: 1500, max: 2700 },
+      angle: { min: 58, max: 82 },
+      rainDelay: 1,
+      /** Seconds a piece lives (fired, rain); it fades out over the last `fade` seconds. */
+      life: { fired: 2.8, rain: 4.5 },
+      fade: 0.5,
+      /** Piece size, share of the sprite (32 x 20 units), and how fast it tumbles (degrees/s) and flutters (rad/s). */
+      size: { min: 0.8, max: 1.5 },
+      spin: 540,
+      flutter: { min: 6, max: 14 },
+      colors: ['#ff4d6d', '#ffd23f', '#3ddc97', '#4cc9f0', '#b57bff', '#ff9f1c'],
+      seed: 9,
+    },
   },
 } as const;
