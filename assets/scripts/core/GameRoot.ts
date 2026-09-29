@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3 } from 'cc';
+import { _decorator, Camera, Component, Node, Vec3 } from 'cc';
 import { Config } from './Config';
 import { EventBus } from './Events';
 import type { GameEvents } from './Events';
@@ -10,6 +10,8 @@ import { BallRenderer } from '../balls/BallRenderer';
 import { CameraRigModel } from '../camera/CameraRigModel';
 import { CameraRigView } from '../camera/CameraRigView';
 import { CoinFlights } from '../economy/CoinFlights';
+import { PuffRenderer } from '../fx/PuffRenderer';
+import { Puffs } from '../fx/Puffs';
 import { PayPad } from '../economy/PayPad';
 import { PayPadView } from '../economy/PayPadView';
 import { Progression } from '../economy/Progression';
@@ -85,6 +87,9 @@ export class GameRoot extends Component {
   @property({ type: CoinFlightView, tooltip: 'Draws the coins in the air (under Canvas/Hud, after the coin counter).' })
   coinFlightView: CoinFlightView | null = null;
 
+  @property({ type: PuffRenderer, tooltip: 'On an empty node at the origin: draws the dust and sparks.' })
+  puffRenderer: PuffRenderer | null = null;
+
   @property({ type: PayPadView, tooltip: 'The price sign over the gate (shows the gate pad).' })
   gateSignView: PayPadView | null = null;
 
@@ -112,13 +117,16 @@ export class GameRoot extends Component {
   private tutorial!: TutorialFlow;
   private markers!: TutorialMarkers;
   private camera!: CameraRigModel;
+  private puffs!: Puffs;
+  private worldCamera!: Camera;
+  private upgradePadSeen = false;
 
   protected onLoad(): void {
     const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
-      gateView, finaleView, tutorialView, coinFlightView } = this;
+      gateView, finaleView, tutorialView, coinFlightView, puffRenderer } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -172,6 +180,19 @@ export class GameRoot extends Component {
     this.markers = new TutorialMarkers(Config.tutorial);
     this.tutorial.begin();
 
+    // Dust and sparks: the balls landing in the shredder, the upgrade, the upgrade pad popping up, the gate opening.
+    this.puffs = new Puffs(Config.puffs);
+    const { recipes } = Config.puffs;
+    this.events.on('ballsShredded', ({ count }) =>
+      this.puffs.emit(recipes.landing, pose.x, pose.y + Config.shredder.handIn.aimHeight, pose.z, Math.min(recipes.landing.count, Math.ceil(count / 4))));
+    this.events.on('tierChanged', ({ tier }) => { if (tier > 1) this.puffs.emit(recipes.upgrade, this.tractor.x, 0, this.tractor.z); });
+    this.events.on('gateOpening', () => {
+      const at = gateView.node.worldPosition;
+      this.puffs.emit(recipes.gate, at.x, at.y + recipes.gate.box[1], at.z + 0.2);
+    });
+    this.worldCamera = cameraView.getComponent(Camera)!;
+    puffRenderer.bind(this.puffs);
+
     this.camera = new CameraRigModel(Config.camera);
     this.camera.snap(this.tractor.x, 0, this.tractor.z);
     this.events.on('tierChanged', ({ tier }) =>
@@ -214,6 +235,8 @@ export class GameRoot extends Component {
       ballView,
       coinHud,
       coinFlightView,
+      puffs: this.puffs,
+      puffRenderer,
       tractorView,
       camera: this.camera,
     });
@@ -237,6 +260,7 @@ export class GameRoot extends Component {
       this.shredder.step(step);
     }
     this.coins.update(frame);
+    this.puffs.update(frame);
     // The gate before the pads: a gate opened by this frame's payment starts counting next frame.
     this.gate.step(frame);
     // Pads take from the purse after this frame's coins have arrived in it.
@@ -257,6 +281,10 @@ export class GameRoot extends Component {
     this.ballView!.render(this.balls, this.bucket);
     this.shredderView!.render(this.shredder);
     this.renderPads();
+    const upgradePad = this.progression.upgradePad;
+    if (upgradePad.shown && !this.upgradePadSeen) this.puffs.emit(Config.puffs.recipes.padPop, upgradePad.x, 0, upgradePad.z);
+    this.upgradePadSeen = upgradePad.shown;
+    this.puffRenderer!.render(this.worldCamera);
     this.gateView!.render(this.gate, step);
     // The ball view has redrawn this frame's moved (flying, removed) and carried balls.
     this.balls.clearMoved();

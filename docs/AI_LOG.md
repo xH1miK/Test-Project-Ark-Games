@@ -415,3 +415,12 @@ New session from the handoff prompt (editor open, `cocos` MCP loaded). The user 
 | 20:22 | Build 15 s, pack **2.852 MB** (+2 KB) | AI | — |
 | 20:25 | Scenario `coin-fx` (GPU, `file://`, both orientations) | AI | PASS first run: per frame one sprite per coin, poses = formula, on screen, UI_2D, draw calls 19 = 19 with the node off, ledger and HUD hold; shots show coins over the counter and from the counter |
 | 20:30–20:50 | GPU one at a time: `drive`, `core-loop`, `pads`, `hud-atlas`, `gate`, `full-run` | AI | All PASS; `gate` portrait failed once on "gateOpened 0.850 s ± a frame" (a hitch frame, like the M11 flakes), clean on rerun (0.867 / 0.851 s); 0 `zm-check-` processes left |
+
+## 2026-09-29 (Tue) — Stage "Juice and UI art", J2: dust and sparks (~20:50–22:00), branch `juice/j2-puffs`
+
+| Time | What | Who | Verification / notes |
+|---|---|---|---|
+| 20:50–21:10 | Design: own pool + one dynamic quad mesh (variant A); pure `Puffs` / `PuffQuads` with tests; `PuffRenderer` (like BallRenderer); own `Puff.effect` because `builtin-sprite` gets its texture from the 2D batcher, not the material; atlas drawn by `procedural.mjs` | AI | 6 new tests; typecheck OK |
+| 21:10–21:25 | Assets and scene: effect, PNG (sprite-frame, trim none), `Puffs.mtl` through asset-db, node `Puffs` + refs through MCP | AI | Structural diff: node + component + one reference |
+| 21:25–21:50 | Scenario `puffs` passed at once, but the shots showed **almost nothing**. A debug scenario (big long-lived puffs) proved the renderer works; the real ones were too faint: born transparent (the shots paused at age 0), dust too small and low among the balls (depth-tested), a thin cloud texture. Fixed: shots pause at age ≥ 0.2 s, denser texture, brighter dust, bigger sizes, dust starts above the ball layer | AI | Puffs now read as milky rings round the tractor, wisps at the shredder, sparks over the doorway. Taste is adjustable in `Config.puffs` |
+| 21:50–22:00 | GPU one at a time: `puffs`, `drive`, `core-loop`, `pads`, `hud-atlas`, `upgrade`, `gate`, `tutorial`, `full-run`, `coin-fx` | AI | All PASS both orientations, 0 leftover browser processes. 165 tests. HTML 2.859 MB (+7 KB); +1 draw call only while puffs are up |
