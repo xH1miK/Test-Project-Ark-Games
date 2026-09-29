@@ -29,7 +29,9 @@ export class UiFit extends Component {
   private apply(): void {
     const { width, height } = screen.windowSize;
     if (width <= 0 || height <= 0) return;
-    const size = fitFrame(width, height, Config.ui.designWidth, Config.ui.designHeight);
+    // A wide, low screen fits a shorter frame: the same UI in units, but larger on the screen.
+    const frameHeight = width > height ? Config.ui.landscapeHeight : Config.ui.designHeight;
+    const size = fitFrame(width, height, Config.ui.designWidth, frameHeight);
     view.setDesignResolutionSize(size.width, size.height, ResolutionPolicy.FIXED_WIDTH);
   }
 }
