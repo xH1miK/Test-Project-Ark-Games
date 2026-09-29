@@ -86,6 +86,6 @@ Out: intro flyover, packshot/CTA, second floor, gold balls, conveyor.
 ## Git
 Small focused commits. Private GitHub repo (xH1miK). Never commit build/, library/, temp/, local/, profiles/, reference/.
 - One branch per milestone/task from `main`: `<stage>/m<N>-<name>` (e.g. `core/m2-drive`).
-- Merge into `main` only after the milestone is verified: `node tools/merge.mjs` — a `--no-ff` merge commit made without touching the working tree (the editor keeps the project open), then HEAD is on `main`; start the next branch with `git switch -c`.
+- Merge into `main` only after the milestone is verified: `node tools/merge.mjs --trailer "<attribution line of the model that worked>"` — a `--no-ff` merge commit made without touching the working tree (the editor keeps the project open), then HEAD is on `main`; start the next branch with `git switch -c`.
 - Roll back a milestone with `git revert -m 1 <merge>`; never reset `main` without the user's OK.
 - Push (main and branches) only when the user asks.
