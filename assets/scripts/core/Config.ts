@@ -372,19 +372,19 @@ export const Config = {
     capacity: 256,
     seed: 23,
     /** Colour (0..255), peak opacity, gravity (units/s², negative falls), drag (share of speed lost per second). */
-    dust: { color: [222, 208, 232], alpha: 0.6, gravity: 0.6, drag: 2.2 },
+    dust: { color: [236, 226, 244], alpha: 0.9, gravity: 0.6, drag: 2.2 },
     spark: { color: [255, 214, 170], alpha: 1, gravity: -1.5, drag: 1.2 },
     /** Fade in over this share of a puff's life. */
     attack: 0.12,
     recipes: {
       /** Balls landing in the shredder (one per landing step, more for a big batch). */
-      landing: { kind: 'dust', count: 3, y: 0.3, box: [0.7, 0.1, 0.7], speed: 1.4, up: [1, 2.2], life: [0.5, 0.85], size: [0.5, 1.5], delay: 0.05, spin: 90 },
+      landing: { kind: 'dust', count: 3, y: 1.3, box: [0.7, 0.1, 0.7], speed: 1.4, up: [1, 2.2], life: [0.55, 0.9], size: [1.4, 3], delay: 0.05, spin: 90 },
       /** The upgrade: a ring round the tractor (the example: 12 puffs, radius 2.4). */
-      upgrade: { kind: 'dust', count: 12, y: 0.35, ring: 1.6, speed: 2.4, up: [0.3, 0.9], life: [0.7, 1.0], size: [1.0, 2.8], delay: 0.06, spin: 60 },
+      upgrade: { kind: 'dust', count: 12, y: 0.9, ring: 1.8, speed: 2.4, up: [0.3, 0.9], life: [0.7, 1.0], size: [2.2, 4.6], delay: 0.06, spin: 60 },
       /** The upgrade pad popping up. */
-      padPop: { kind: 'dust', count: 10, y: 0.3, ring: 2.4, speed: 2.2, up: [0.3, 0.9], life: [0.6, 0.9], size: [0.9, 2.4], delay: 0.1, spin: 60 },
+      padPop: { kind: 'dust', count: 10, y: 0.7, ring: 2.4, speed: 2.2, up: [0.3, 0.9], life: [0.6, 0.9], size: [2, 4], delay: 0.1, spin: 60 },
       /** The gate opening: sparks all over the doorway, born within the opening time. */
-      gate: { kind: 'spark', count: 44, y: 0, box: [2.4, 1.6, 0.15], speed: 0.4, up: [1.2, 3], life: [0.5, 0.9], size: [0.3, 0.06], delay: 0.7, spin: 0 },
+      gate: { kind: 'spark', count: 64, y: 0, box: [2.4, 1.6, 0.15], speed: 0.4, up: [1.2, 3], life: [0.55, 1], size: [1.1, 0.3], delay: 0.7, spin: 0 },
     },
   },
 

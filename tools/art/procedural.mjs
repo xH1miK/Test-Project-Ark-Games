@@ -137,7 +137,7 @@ function puffs() {
       if (tile === 0) {
         let sum = 0;
         for (const l of lobes) sum += clamp01(1 - Math.hypot(u - l.x, v - l.y) / l.r) ** 1.5;
-        a = clamp01(sum * 0.55) * clamp01(1 - r) ** 0.6;
+        a = clamp01(sum * 1.0) * clamp01(1 - r) ** 0.6;
       } else {
         const core = Math.exp(-(r * r) / 0.018);
         const armX = Math.exp(-Math.abs(v) / 0.045) * clamp01(1 - Math.abs(u)) ** 2.2;
