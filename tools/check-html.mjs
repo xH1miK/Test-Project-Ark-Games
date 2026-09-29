@@ -4,12 +4,15 @@
 // scenario (tools/scenarios/<name>.mjs) that drives the game through the ?qa hooks (window.__zm).
 //
 //   node tools/check-html.mjs [dist/ZombieMiner.html | http://localhost:7456/] [--size 390x844] [--size 844x390]
-//                            [--wait 15] [--query zm-inflate=js] [--shots dist/shots] [--scenario level] [--gpu] [--webgl1]
+//                            [--wait 15] [--query zm-inflate=js] [--shots dist/shots] [--scenario level] [--gpu] [--webgl1] [--locked-audio]
 //
 // A file is opened from file:// (the real ad-network condition); an http URL (e.g. the editor preview)
 // is handy while iterating. The page runs as a phone: mobile viewport, DPR 2, touch screen.
 // --webgl1 hides WebGL 2 from the page (as on an old phone), so the engine falls back to WebGL 1;
 // --hide-ext EXT_frag_depth (repeatable) hides a WebGL extension, as on a GPU without it.
+// --locked-audio runs the browser with its default autoplay policy: an AudioContext stays suspended until a real
+// user gesture (as on a phone); without it the browser is told to allow autoplay. A scenario module may export
+// `initScript` (source run in the page before anything else, e.g. to tap the audio output).
 // Env: CHROME_PATH to override the browser (tools/lib/browser.mjs). Exit code 1 if any check fails.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -26,6 +29,7 @@ const takeAll = (name) => {
 const sizes = takeAll('--size');
 const useGpu = argv.includes('--gpu') && Boolean(argv.splice(argv.indexOf('--gpu'), 1));
 const webgl1 = argv.includes('--webgl1') && Boolean(argv.splice(argv.indexOf('--webgl1'), 1));
+const lockedAudio = argv.includes('--locked-audio') && Boolean(argv.splice(argv.indexOf('--locked-audio'), 1));
 const hiddenExtensions = takeAll('--hide-ext');
 const waitSec = Number(takeAll('--wait')[0] || 15);
 const scenarioName = takeAll('--scenario')[0];
@@ -41,7 +45,8 @@ const label = isHttp ? new URL(target).host.replace(/\W+/g, '_') : basename(targ
 /** Requests that stay inside the playable: the file itself, blob:/data: URLs, or the same http origin. */
 const isInternal = (u) => /^(blob|data):/.test(u) || (isHttp ? u.startsWith(new URL(target).origin) : u.split('?')[0] === baseUrl);
 
-const scenario = scenarioName ? (await import(pathToFileURL(resolve(`tools/scenarios/${scenarioName}.mjs`)).href)).default : null;
+const scenarioModule = scenarioName ? await import(pathToFileURL(resolve(`tools/scenarios/${scenarioName}.mjs`)).href) : null;
+const scenario = scenarioModule?.default ?? null;
 
 const exe = browserPath();
 
@@ -85,6 +90,7 @@ function scenarioContext(cdp, size, results) {
   return {
     size,
     shotsDir,
+    lockedAudio,
     evaluate: cdp.evaluate,
     sleep,
     shot,
@@ -131,7 +137,7 @@ function scenarioContext(cdp, size, results) {
 
 let failed = false;
 console.log(`${label}${isHttp ? '' : `  (${(readFileSync(target).length / 1e6).toFixed(3)} MB)`} in ${basename(exe)}` +
-  ` (${useGpu ? 'GPU' : 'SwiftShader'}${webgl1 ? ', WebGL 1 forced' : ''}${hiddenExtensions.map((e) => `, no ${e}`).join('')})` +
+  ` (${useGpu ? 'GPU' : 'SwiftShader'}${webgl1 ? ', WebGL 1 forced' : ''}${lockedAudio ? ', audio locked until a gesture' : ''}${hiddenExtensions.map((e) => `, no ${e}`).join('')})` +
   (scenarioName ? `, scenario: ${scenarioName}` : ''));
 mkdirSync(shotsDir, { recursive: true });
 
@@ -156,6 +162,7 @@ await withBrowser(async (cdp) => {
       HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return type === 'webgl2' ? null : getContext.call(this, type, ...rest); };
     })()` });
   }
+  if (scenarioModule?.initScript) await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: scenarioModule.initScript });
   if (hiddenExtensions.length) {
     // An extension never enabled through getExtension is not available to shaders either.
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
@@ -211,5 +218,5 @@ await withBrowser(async (cdp) => {
     for (const c of results.checks) console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} ${c.message}`);
     console.log(`  screenshots: ${[shot, ...results.shots].join('\n               ')}`);
   }
-}, { gpu: useGpu });
+}, { gpu: useGpu, autoplay: !lockedAudio });
 process.exit(failed ? 1 : 0);
