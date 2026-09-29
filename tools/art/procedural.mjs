@@ -116,10 +116,48 @@ function confetti() {
   return { data, width: w, height: h };
 }
 
+/**
+ * puffs: the atlas of the dust and sparks (Puffs), 128 x 64: a soft cloud of a few overlapping lobes on
+ * the left, a 4-point glinting star on the right. White; the game tints it per kind by the vertex colour.
+ */
+function puffs() {
+  const w = 128;
+  const h = 64;
+  const data = Buffer.alloc(w * h * 4);
+  const random = mulberry32(7);
+  const lobes = [];
+  for (let k = 0; k < 6; k++) lobes.push({ x: (random() - 0.5) * 0.7, y: (random() - 0.5) * 0.7, r: 0.3 + 0.2 * random() });
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const tile = x < 64 ? 0 : 1;
+      const u = ((x % 64) + 0.5) / 32 - 1;
+      const v = (y + 0.5) / 32 - 1;
+      const r = Math.hypot(u, v);
+      let a = 0;
+      if (tile === 0) {
+        let sum = 0;
+        for (const l of lobes) sum += clamp01(1 - Math.hypot(u - l.x, v - l.y) / l.r) ** 1.5;
+        a = clamp01(sum * 0.55) * clamp01(1 - r) ** 0.6;
+      } else {
+        const core = Math.exp(-(r * r) / 0.018);
+        const armX = Math.exp(-Math.abs(v) / 0.045) * clamp01(1 - Math.abs(u)) ** 2.2;
+        const armY = Math.exp(-Math.abs(u) / 0.045) * clamp01(1 - Math.abs(v)) ** 2.2;
+        const glow = 0.35 * Math.exp(-(r * r) / 0.12);
+        a = clamp01(Math.max(core, armX, armY) + glow);
+      }
+      const i = (y * w + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = Math.round(a * 255);
+    }
+  }
+  return { data, width: w, height: h };
+}
+
 const MAKERS = {
   curtain: { make: curtain, out: 'assets/textures/fx/curtain.png' },
   curtainSparks: { make: sparks, out: 'assets/textures/fx/curtain_sparks.png' },
   confetti: { make: confetti, out: 'assets/textures/ui/confetti.png' },
+  puffs: { make: puffs, out: 'assets/textures/fx/puffs.png' },
 };
 
 const names = process.argv.slice(2).filter((a) => !a.startsWith('--'));

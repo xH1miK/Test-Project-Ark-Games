@@ -1,0 +1,57 @@
+// Dust and sparks: camera-facing quads in world space (vertices from PuffQuads: position, uv, colour),
+// one texture atlas tinted by the vertex colour, alpha blended, depth tested and not written, so the
+// tractor and the balls in front hide them and they do not hide each other. One draw call for all.
+CCEffect %{
+  techniques:
+  - name: transparent
+    passes:
+    - vert: puff-vs:vert
+      frag: puff-fs:frag
+      rasterizerState:
+        cullMode: none
+      depthStencilState:
+        depthTest: true
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
+      properties:
+        mainTexture: { value: white }
+}%
+
+CCProgram puff-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec2 v_uv;
+  out vec4 v_color;
+
+  vec4 vert () {
+    v_uv = a_texCoord;
+    v_color = a_color;
+    return cc_matViewProj * vec4(a_position, 1.0);
+  }
+}%
+
+CCProgram puff-fs %{
+  precision highp float;
+  #include <legacy/output>
+
+  in vec2 v_uv;
+  in vec4 v_color;
+
+  uniform sampler2D mainTexture;
+
+  vec4 frag () {
+    vec4 t = texture(mainTexture, v_uv);
+    return CCFragOutput(vec4(t.rgb * v_color.rgb, t.a * v_color.a));
+  }
+}%

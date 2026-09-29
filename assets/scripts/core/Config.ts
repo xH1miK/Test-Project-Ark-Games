@@ -362,6 +362,32 @@ export const Config = {
    * the top. All sizes and speeds in UI units of the design frame (1280 x 2276 portrait); the confetti
    * fills whatever screen the frame is fitted to.
    */
+  /**
+   * Dust and sparks (Puffs, drawn as camera-facing quads in one draw call): a pool of `capacity`, the
+   * two kinds' look and the recipes the game emits. A recipe: how many, where (a ring of `ring` radius
+   * or a box of half sizes `box` round the point), outward `speed` and `up` speed, `life`, `size`
+   * (from -> to), `delay` (each puff is born within this many seconds) and `spin` (degrees/s).
+   */
+  puffs: {
+    capacity: 256,
+    seed: 23,
+    /** Colour (0..255), peak opacity, gravity (units/s², negative falls), drag (share of speed lost per second). */
+    dust: { color: [222, 208, 232], alpha: 0.6, gravity: 0.6, drag: 2.2 },
+    spark: { color: [255, 214, 170], alpha: 1, gravity: -1.5, drag: 1.2 },
+    /** Fade in over this share of a puff's life. */
+    attack: 0.12,
+    recipes: {
+      /** Balls landing in the shredder (one per landing step, more for a big batch). */
+      landing: { kind: 'dust', count: 3, y: 0.3, box: [0.7, 0.1, 0.7], speed: 1.4, up: [1, 2.2], life: [0.5, 0.85], size: [0.5, 1.5], delay: 0.05, spin: 90 },
+      /** The upgrade: a ring round the tractor (the example: 12 puffs, radius 2.4). */
+      upgrade: { kind: 'dust', count: 12, y: 0.35, ring: 1.6, speed: 2.4, up: [0.3, 0.9], life: [0.7, 1.0], size: [1.0, 2.8], delay: 0.06, spin: 60 },
+      /** The upgrade pad popping up. */
+      padPop: { kind: 'dust', count: 10, y: 0.3, ring: 2.4, speed: 2.2, up: [0.3, 0.9], life: [0.6, 0.9], size: [0.9, 2.4], delay: 0.1, spin: 60 },
+      /** The gate opening: sparks all over the doorway, born within the opening time. */
+      gate: { kind: 'spark', count: 44, y: 0, box: [2.4, 1.6, 0.15], speed: 0.4, up: [1.2, 3], life: [0.5, 0.9], size: [0.3, 0.06], delay: 0.7, spin: 0 },
+    },
+  },
+
   finale: {
     title: { text: 'GATE OPEN!', pop: 0.45, height: 0.26, pulseScale: 1.05, pulsePeriod: 0.9 },
     confetti: {
