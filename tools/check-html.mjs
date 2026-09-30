@@ -10,6 +10,7 @@
 // is handy while iterating. The page runs as a phone: mobile viewport, DPR 2, touch screen.
 // --webgl1 hides WebGL 2 from the page (as on an old phone), so the engine falls back to WebGL 1;
 // --hide-ext EXT_frag_depth (repeatable) hides a WebGL extension, as on a GPU without it.
+// The scenario `sizes` (like `camera`) keeps the game's own start camera beat; every other scenario gets ?nopeek.
 // --locked-audio runs the browser with its default autoplay policy: an AudioContext stays suspended until a real
 // user gesture (as on a phone); without it the browser is told to allow autoplay. A scenario module may export
 // `initScript` (source run in the page before anything else, e.g. to tap the audio output).
@@ -33,7 +34,7 @@ const lockedAudio = argv.includes('--locked-audio') && Boolean(argv.splice(argv.
 const hiddenExtensions = takeAll('--hide-ext');
 const waitSec = Number(takeAll('--wait')[0] || 15);
 const scenarioName = takeAll('--scenario')[0];
-const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1', scenarioName && scenarioName !== 'camera' && 'nopeek=1'].filter(Boolean);
+const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1', scenarioName && !['camera', 'sizes'].includes(scenarioName) && 'nopeek=1'].filter(Boolean);
 const shotsDir = resolve(takeAll('--shots')[0] || 'dist/shots');
 const target = argv[0] || 'dist/ZombieMiner.html';
 if (!sizes.length) sizes.push('390x844', '844x390'); // phone portrait + landscape (CSS px)
@@ -98,6 +99,13 @@ function scenarioContext(cdp, size, results) {
     touch: (type, x, y) => cdp.send('Input.dispatchTouchEvent', {
       type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y, id: 1, radiusX: 4, radiusY: 4, force: 1 }],
     }),
+    /** A new device size, as a rotation or a window drag would give (CSS px; dpr = the device pixel ratio). The page gets its resize events. */
+    resize: (width, height, dpr = 2) => cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: dpr, mobile: true }),
+    /**
+     * Cut-outs and rounded corners: CSS env(safe-area-inset-*) values, px (a zero object clears them). Needs a browser that
+     * has Emulation.setSafeAreaInsetsOverride; rejects otherwise.
+     */
+    safeArea: ({ top = 0, right = 0, bottom = 0, left = 0 }) => cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top, right, bottom, left } }),
     /**
      * Several fingers at once: DevTools wants the list of ALL active points with every event (one event per point that
      * changed is generated). type touchStart | touchMove | touchEnd; points [{ x, y, id }] in CSS px. touchStart and

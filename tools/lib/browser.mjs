@@ -11,7 +11,7 @@
 // killing whatever earlier runs left (a run stopped from outside never reaches its own clean-up).
 
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readdirSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { constants, freemem, setPriority, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -58,6 +58,22 @@ export function killStrayBrowsers() {
   console.warn(`browser: killing ${pids.length} processes left by earlier runs`);
   killPids(pids);
   return pids.length;
+}
+
+/**
+ * Removes the profile folders earlier runs could not delete (a file was still locked then). They pile up (30 of them, tens
+ * of MB each, kept Windows Defender at 95% CPU on 30.09) — call it after killStrayBrowsers, when none can be in use.
+ */
+export function sweepProfiles() {
+  let removed = 0;
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith(PROFILE_PREFIX)) continue;
+    try {
+      rmSync(join(tmpdir(), name), { recursive: true, force: true });
+      removed++;
+    } catch { /* still locked: the next run tries again */ }
+  }
+  return removed;
 }
 
 /** Waits until the machine has MIN_FREE_MB of free memory (up to a minute), else throws. */
@@ -110,6 +126,7 @@ export async function withBrowser(fn, { gpu = false, autoplay = true } = {}) {
   const affinity = Number(process.env.ZM_AFFINITY || 0);
   if (affinity > 0 && IS_WINDOWS) powershell(`(Get-Process -Id ${process.pid}).ProcessorAffinity = ${affinity}`);
   killStrayBrowsers();
+  sweepProfiles();
   await waitForMemory();
   const profile = mkdtempSync(join(tmpdir(), PROFILE_PREFIX));
   const proc = spawn(browserPath(), [

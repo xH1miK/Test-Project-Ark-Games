@@ -13,3 +13,25 @@ export function fitFrame(
   const scale = Math.min(screenWidth / frameWidth, screenHeight / frameHeight);
   return { width: screenWidth / scale, height: screenHeight / scale };
 }
+
+/** Gaps between the screen's edges and its safe area, design units. */
+export interface Insets {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * The gaps of a safe rectangle inside the design area (both in design units, origin at the bottom-left, +Y up: what
+ * `sys.getSafeAreaRect` returns). Never negative; a gap of a hundredth of a unit is rounding noise and counts as none.
+ */
+export function safeInsets(rect: { x: number; y: number; width: number; height: number }, designWidth: number, designHeight: number): Insets {
+  const gap = (v: number): number => (v > 0.01 ? v : 0);
+  return {
+    left: gap(rect.x),
+    bottom: gap(rect.y),
+    right: gap(designWidth - (rect.x + rect.width)),
+    top: gap(designHeight - (rect.y + rect.height)),
+  };
+}

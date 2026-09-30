@@ -104,3 +104,37 @@ test('resize moves the rest point: a released base jumps there, a held one stays
   for (let t = 0; t < 3; t += 1 / 60) j.update(1 / 60);
   near(j.base.y, -1385 + 300, 1e-3);
 });
+
+test('insets: the rest point is centred in the safe area and lifted above the bottom gap', () => {
+  const j = make();
+  j.setInsets(120, 40, 60, 110);
+  near(j.base.x, (120 - 40) / 2);
+  near(j.base.y, -1385 + 110 + 300);
+  j.setInsets(0, 0, 0, 0);
+  near(j.base.x, 0);
+  near(j.base.y, -1385 + 300);
+});
+
+test('insets: a touch never puts the base nearer the safe area\'s edge than the margin', () => {
+  const j = make();
+  j.setInsets(100, 60, 80, 90);
+  // Far into the bottom-left corner of the area: the base stops at the safe area's edge + the margin.
+  j.press(-640, -1385);
+  near(j.base.x, -640 + 100 + SETTINGS.edgeMargin);
+  near(j.base.y, -1385 + 90 + SETTINGS.edgeMargin);
+  j.release();
+  j.press(640, 1385);
+  near(j.base.x, 640 - 60 - SETTINGS.edgeMargin);
+  near(j.base.y, 1385 - 80 - SETTINGS.edgeMargin);
+});
+
+test('insets: a released base glides to the new rest point; a held one stays where the finger put it', () => {
+  const j = make();
+  j.press(200, 300);
+  const held = { x: j.base.x, y: j.base.y };
+  j.setInsets(0, 0, 0, 200);
+  assert.deepEqual({ x: j.base.x, y: j.base.y }, held);
+  j.release();
+  for (let i = 0; i < 200; i++) j.update(0.016);
+  near(j.base.y, -1385 + 200 + 300, 1e-3);
+});

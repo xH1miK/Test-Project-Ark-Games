@@ -167,7 +167,7 @@ export const Config = {
     tierZoom: 1.2,
     zoomTime: 0.5,
     /** Framing by screen shape (see CameraRigSettings): a 9:16 phone is the design frame (ref 0.5625). */
-    aspect: { ref: 0.5625, power: 0.5, min: 0.75, max: 1.15 },
+    aspect: { ref: 0.5625, power: 0.5, min: 0.75, max: 1.3 },
     /** The upgrade pad popping up: the camera leans toward it and pulls out a little, then comes back. */
     peekPad: { share: 0.55, zoom: 1.15, inTime: 0.35, holdTime: 0.7, outTime: 0.6 },
     /** The gate opening: the camera pulls out toward the gate and stays (the run is over). */
@@ -366,10 +366,10 @@ export const Config = {
     coinHud: { punchScale: 1.16, punchTime: 0.14 },
     /**
      * The mute button (bottom-left, in the Hud group): the icon is 100 units, the touch area round it `touch` (a finger
-     * is bigger than 100 units of a 1280-wide frame: ~30 CSS px on a phone, 55 with the area), `margin` from the corner.
+     * is bigger than 100 units of a 1280-wide frame: ~30 CSS px on a phone, 61 with the area), `margin` from the corner.
      * Pressed, the icon shrinks to `pressScale` in `pressTime` s and springs back over `releaseTime`.
      */
-    muteButton: { icon: 100, touch: 180, margin: 10, pressScale: 0.86, pressTime: 0.06, releaseTime: 0.2 },
+    muteButton: { icon: 100, touch: 200, margin: 10, pressScale: 0.86, pressTime: 0.06, releaseTime: 0.2 },
   },
 
   /**
