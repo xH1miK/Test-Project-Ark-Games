@@ -8,6 +8,8 @@
 //
 // A file is opened from file:// (the real ad-network condition); an http URL (e.g. the editor preview)
 // is handy while iterating. The page runs as a phone: mobile viewport, DPR 2, touch screen.
+// --cpu-throttle 6 slows the page's main thread 6x (DevTools CPU throttling): a rough stand-in for a weak phone's JS speed
+// (the GPU side is not slowed: fill rate on a phone can only be measured on a phone).
 // --webgl1 hides WebGL 2 from the page (as on an old phone), so the engine falls back to WebGL 1;
 // --hide-ext EXT_frag_depth (repeatable) hides a WebGL extension, as on a GPU without it.
 // The scenario `sizes` (like `camera`) keeps the game's own start camera beat; every other scenario gets ?nopeek.
@@ -32,6 +34,7 @@ const useGpu = argv.includes('--gpu') && Boolean(argv.splice(argv.indexOf('--gpu
 const webgl1 = argv.includes('--webgl1') && Boolean(argv.splice(argv.indexOf('--webgl1'), 1));
 const lockedAudio = argv.includes('--locked-audio') && Boolean(argv.splice(argv.indexOf('--locked-audio'), 1));
 const hiddenExtensions = takeAll('--hide-ext');
+const cpuThrottle = Number(takeAll('--cpu-throttle')[0] || 1);
 const waitSec = Number(takeAll('--wait')[0] || 15);
 const scenarioName = takeAll('--scenario')[0];
 const queryParts = [takeAll('--query')[0], scenarioName && 'qa=1', scenarioName && !['camera', 'sizes'].includes(scenarioName) && 'nopeek=1'].filter(Boolean);
@@ -154,7 +157,7 @@ function scenarioContext(cdp, size, results) {
 
 let failed = false;
 console.log(`${label}${isHttp ? '' : `  (${(readFileSync(target).length / 1e6).toFixed(3)} MB)`} in ${basename(exe)}` +
-  ` (${useGpu ? 'GPU' : 'SwiftShader'}${webgl1 ? ', WebGL 1 forced' : ''}${lockedAudio ? ', audio locked until a gesture' : ''}${hiddenExtensions.map((e) => `, no ${e}`).join('')})` +
+  ` (${useGpu ? 'GPU' : 'SwiftShader'}${webgl1 ? ', WebGL 1 forced' : ''}${lockedAudio ? ', audio locked until a gesture' : ''}${cpuThrottle > 1 ? `, CPU ${cpuThrottle}x slower` : ''}${hiddenExtensions.map((e) => `, no ${e}`).join('')})` +
   (scenarioName ? `, scenario: ${scenarioName}` : ''));
 mkdirSync(shotsDir, { recursive: true });
 
@@ -199,6 +202,7 @@ await withBrowser(async (cdp) => {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: true });
     // A phone has a touch screen: the engine picks touch input at startup ('ontouchstart' in window).
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    if (cpuThrottle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuThrottle });
     await cdp.send('Page.navigate', { url });
     let probe;
     const t0 = Date.now();
