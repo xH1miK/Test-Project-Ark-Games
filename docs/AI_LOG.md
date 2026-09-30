@@ -497,3 +497,4 @@ The user told me to go on with S3 ("I will listen later"); before S4 they said t
 
 Slips on the way (S3): a heredoc with quotes did not parse in bash again (nothing ran; the files were written with the file tool); the editor scripts' safety check blocked a `'/*'` string literal; a huge dump of a Sprite component (`inspect_component` returns the whole engine graph) — not to repeat. Human: nothing needed.
 
+| ~01:33 | SwiftShader results: `mute`, `mute:locked`, `drive` all PASS portrait + landscape (7–13 fps); 0 processes left | AI | S3 closed: 208 tests, typecheck OK, HTML 3.332 MB. S1 is approved by the user (listened to every clip, liked all); S1–S3 are merged into main in one merge from `sound/s3-mute` |
