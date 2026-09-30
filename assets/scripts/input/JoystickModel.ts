@@ -39,6 +39,8 @@ export class JoystickModel {
   private readonly rest: Vec2Like = { x: 0, y: 0 };
   private halfWidth = 0;
   private halfHeight = 0;
+  /** Gaps of the safe area inside the touch area (a cut-out, a home indicator): the rest point and the base stay inside them. */
+  private readonly insets = { left: 0, right: 0, top: 0, bottom: 0 };
   private held = false;
   private enabled = true;
 
@@ -64,8 +66,25 @@ export class JoystickModel {
   setArea(width: number, height: number): void {
     this.halfWidth = width / 2;
     this.halfHeight = height / 2;
-    this.rest.x = 0;
-    this.rest.y = Math.min(-this.halfHeight + this.settings.restHeight, this.halfHeight);
+    this.layout();
+  }
+
+  /**
+   * The gaps between the touch area's edges and the safe area (design units). The rest point is centred in the safe
+   * area and lifted above the bottom gap; a touch never puts the base nearer to the safe area's edge than `edgeMargin`.
+   */
+  setInsets(left: number, right: number, top: number, bottom: number): void {
+    this.insets.left = left;
+    this.insets.right = right;
+    this.insets.top = top;
+    this.insets.bottom = bottom;
+    this.layout();
+  }
+
+  private layout(): void {
+    const { left, right, top, bottom } = this.insets;
+    this.rest.x = (left - right) / 2;
+    this.rest.y = Math.min(-this.halfHeight + bottom + this.settings.restHeight, this.halfHeight - top);
     if (!this.held) {
       this.base.x = this.rest.x;
       this.base.y = this.rest.y;
@@ -80,8 +99,10 @@ export class JoystickModel {
     const dx = x - this.base.x;
     const dy = y - this.base.y;
     if (dx * dx + dy * dy > this.settings.radius * this.settings.radius) {
-      this.base.x = clampToEdges(x, this.halfWidth, this.settings.edgeMargin);
-      this.base.y = clampToEdges(y, this.halfHeight, this.settings.edgeMargin);
+      const { edgeMargin } = this.settings;
+      const { left, right, top, bottom } = this.insets;
+      this.base.x = clampBetween(x, -this.halfWidth + left, this.halfWidth - right, edgeMargin);
+      this.base.y = clampBetween(y, -this.halfHeight + bottom, this.halfHeight - top, edgeMargin);
     }
     this.drag(x, y);
   }
@@ -127,7 +148,10 @@ export class JoystickModel {
   }
 }
 
-function clampToEdges(value: number, half: number, margin: number): number {
-  const limit = Math.max(half - margin, 0);
-  return value < -limit ? -limit : value > limit ? limit : value;
+/** Value kept `margin` inside [low, high]; when the range is narrower than that, its middle. */
+function clampBetween(value: number, low: number, high: number, margin: number): number {
+  const lo = low + margin;
+  const hi = high - margin;
+  if (lo > hi) return (low + high) / 2;
+  return value < lo ? lo : value > hi ? hi : value;
 }

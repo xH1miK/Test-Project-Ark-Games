@@ -34,6 +34,7 @@ import { CoinFlightView } from '../ui/CoinFlightView';
 import { CoinHud } from '../ui/CoinHud';
 import { FinaleView } from '../ui/FinaleView';
 import { MuteButton } from '../ui/MuteButton';
+import { SafeAreaFit } from '../ui/SafeAreaFit';
 import { Gate } from '../world/Gate';
 import { GateView } from '../world/GateView';
 import type { ObstacleGrid } from '../world/ObstacleGrid';
@@ -112,6 +113,9 @@ export class GameRoot extends Component {
   @property({ type: MuteButton, tooltip: 'The mute button, bottom-left under Canvas/Hud.' })
   muteButton: MuteButton | null = null;
 
+  @property({ type: SafeAreaFit, tooltip: 'On Canvas/Hud: keeps it out of cut-outs; the joystick is told the same gaps.' })
+  safeAreaFit: SafeAreaFit | null = null;
+
   readonly events = new EventBus<GameEvents>();
   private obstacles!: ObstacleGrid;
   private joystick!: JoystickModel;
@@ -135,10 +139,10 @@ export class GameRoot extends Component {
 
   protected onLoad(): void {
     const { level, startSpot, tractorView, cameraView, joystickView, ballView, shredderView, coinHud, upgradePadView, gatePadView, gateSignView,
-      gateView, finaleView, tutorialView, coinFlightView, puffRenderer, soundView, muteButton } = this;
+      gateView, finaleView, tutorialView, coinFlightView, puffRenderer, soundView, muteButton, safeAreaFit } = this;
     if (!level || !startSpot || !tractorView || !cameraView || !joystickView || !ballView || !shredderView || !coinHud
-      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer || !soundView || !muteButton) {
-      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs, sound, mute button) must be assigned');
+      || !upgradePadView || !gatePadView || !gateSignView || !gateView || !finaleView || !tutorialView || !coinFlightView || !puffRenderer || !soundView || !muteButton || !safeAreaFit) {
+      throw new Error('GameRoot: level, startSpot, the views (tractor, camera, joystick, balls, shredder, coin HUD, pads, gate sign, gate curtain, finale, tutorial, coin flights, puffs, sound, mute button, safe area) must be assigned');
     }
     this.obstacles = buildObstacleGrid(level, Config.world.bounds, Config.world.cellSize);
 
@@ -228,6 +232,7 @@ export class GameRoot extends Component {
       { flights: gatePad.flights, toHud: false },
     ]);
     joystickView.bind(this.joystick);
+    safeAreaFit.listen(({ left, right, top, bottom }) => this.joystick.setInsets(left, right, top, bottom));
     tractorView.render(this.tractor);
     cameraView.render(this.camera);
     ballView.bind(this.balls, radius, Config.balls.look, Config.balls.bounds);
@@ -264,6 +269,7 @@ export class GameRoot extends Component {
       sound: this.sound,
       soundView,
       muteButton,
+      safeAreaFit,
       tractorView,
       camera: this.camera,
     });
