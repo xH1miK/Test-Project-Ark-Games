@@ -98,6 +98,15 @@ function scenarioContext(cdp, size, results) {
     touch: (type, x, y) => cdp.send('Input.dispatchTouchEvent', {
       type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y, id: 1, radiusX: 4, radiusY: 4, force: 1 }],
     }),
+    /**
+     * Several fingers at once: DevTools wants the list of ALL active points with every event (one event per point that
+     * changed is generated). type touchStart | touchMove | touchEnd; points [{ x, y, id }] in CSS px. touchStart and
+     * touchMove list every finger that is down; touchEnd lists the fingers that are LIFTED (measured: an empty list lifts
+     * them all, as `touch` does).
+     */
+    touchPoints: (type, points) => cdp.send('Input.dispatchTouchEvent', {
+      type, touchPoints: points.map((p) => ({ x: p.x, y: p.y, id: p.id, radiusX: 4, radiusY: 4, force: 1 })),
+    }),
     log: (...args) => results.log.push(args.join(' ')),
     check: (ok, message) => {
       results.checks.push({ ok: !!ok, message });

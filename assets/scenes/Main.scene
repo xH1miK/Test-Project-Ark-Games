@@ -15677,8 +15677,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 160,
-      "height": 160
+      "width": 180,
+      "height": 180
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -15699,10 +15699,10 @@
     "__prefab": null,
     "_alignFlags": 12,
     "_target": null,
-    "_left": 20,
+    "_left": 10,
     "_right": 0,
     "_top": 0,
-    "_bottom": 20,
+    "_bottom": 10,
     "_horizontalCenter": 0,
     "_verticalCenter": 0,
     "_isAbsLeft": true,
