@@ -21,6 +21,7 @@
 //   node tools/check-html.mjs <html|url> --scenario full-run [--gpu]
 
 import { installAutopilot } from './lib/autopilot.mjs';
+import { RECORDER, judgeCalls } from './lib/audio-tap.mjs';
 import { FPS } from './lib/camera.mjs';
 import { checkLoopProbe, installLoopProbe, loopState, settleCoins } from './lib/loop-probe.mjs';
 import { METRICS, installSweep } from './lib/run-metrics.mjs';
@@ -141,6 +142,7 @@ export default async function fullRun(t) {
   const shredder = await installSweep(t);
   await t.evaluate(`(() => { __ap.until.upgraded = () => __zm.tractor.tier >= 2; __ap.until.gateOpen = () => __zm.gate.phase !== 'closed'; })()`);
   await t.evaluate(RUN_PROBE);
+  await t.evaluate(RECORDER); // every call of the sound rules, judged at the end
   const cfg = await t.evaluate('__zm.config.tutorial');
   const eco = await t.evaluate('__zm.config.economy');
   const gateCfg = await t.evaluate('__zm.config.gate');
@@ -259,6 +261,33 @@ export default async function fullRun(t) {
   const grew = heap[1].used - heap[0].used;
   t.log(`live JS heap after GC: ${heap.map((h) => `${h.label} ${(h.used / 1e6).toFixed(2)} MB at ${(h.clock - clock0).toFixed(1)} s`).join(', ')}; grew ${(grew / 1e3).toFixed(0)} KB over the run`);
   t.check(grew < HEAP_GROWTH_LIMIT, `the live JS heap did not blow up over the run (${(grew / 1e3).toFixed(0)} KB, limit ${HEAP_GROWTH_LIMIT / 1e3} KB)`);
+
+  // Sound over the whole run: the game's facts made the right sounds, and the rules held for every call.
+  const soundCfg = await t.evaluate('__zm.config.sound');
+  const rec = await t.evaluate('window.__soundRec');
+  const verdict = judgeCalls(rec.calls, soundCfg.shots, soundCfg.maxShotsPerFrame);
+  const dropped = await t.evaluate('__zm.sound.dropped');
+  t.log(`sound: accepted ${JSON.stringify(verdict.counts)}; dropped ${JSON.stringify(dropped)}; at most ${verdict.worst} one-shots in a frame; most voices ${rec.maxVoices}`);
+  t.check(verdict.problems.length === 0, `sound: the rules held for all ${rec.calls.length} calls of the run${verdict.problems.length ? ': ' + verdict.problems.slice(0, 3).join('; ') : ''}`);
+  t.check(rec.maxVoices <= soundCfg.maxVoices && dropped.pool === 0, `sound: never more than ${soundCfg.maxVoices} voices (most ${rec.maxVoices})`);
+  t.check(verdict.counts.upgrade === 1, `sound: the tier-up played the upgrade sound once (${verdict.counts.upgrade ?? 0})`);
+  const gateCalls = rec.calls.filter((c) => c.ok && (c.id === 'purchase' || c.id === 'gate'));
+  t.check(gateCalls.length === 2 && gateCalls[0].id === 'purchase' && gateCalls[1].id === 'gate' && gateCalls[0].frame === gateCalls[1].frame,
+    `sound: the gate bought = the purchase sound and the whoosh, once each, together (${gateCalls.map((c) => c.id + '@' + c.frame)})`);
+  const acceptedUpgrade = rec.calls.find((c) => c.ok && c.id === 'upgrade');
+  t.check(acceptedUpgrade && gateCalls.length > 0 && acceptedUpgrade.now < gateCalls[0].now, 'sound: the upgrade sound came before the gate sounds');
+  t.check((verdict.counts.ball ?? 0) >= 8 && (verdict.counts.coin ?? 0) >= 20, `sound: the balls clicked (${verdict.counts.ball}) and the coins chimed (${verdict.counts.coin})`);
+  // The pads' coins: the variant steps up with the price filling, from the first coin to the last, per pad.
+  const spends = rec.calls.filter((c) => c.id === 'spend').map((c) => c.progress);
+  const segments = [];
+  for (const p of spends) {
+    if (segments.length && p >= segments[segments.length - 1][segments[segments.length - 1].length - 1]) segments[segments.length - 1].push(p);
+    else segments.push([p]);
+  }
+  t.log(`sound: pad coins in ${segments.length} runs, progress ${segments.map((g) => g[0].toFixed(2) + '..' + g[g.length - 1].toFixed(2)).join(' | ')}; ${verdict.counts.spend ?? 0} played`);
+  t.check(segments.length === 2 && segments.every((g) => g.length >= 4 && g[0] < 0.5 && g[g.length - 1] > 0.99), 'sound: the pad coins step up as each price fills (two pads, progress rising to the full price)');
+  const audio = await t.evaluate("({ unlocked: __zm.sound.unlocked, music: __zm.sound.loopRunning('music'), engine: __zm.sound.loopRunning('engine'), grind: __zm.sound.loopRunning('grind') })");
+  t.check(audio.unlocked && audio.music && !audio.engine && !audio.grind, `sound at the end: the music plays, the engine and the grind are off (${JSON.stringify(audio)})`);
 
   // The core loop's and the tutorial's verdicts over every frame of the run.
   await checkLoopProbe(t, end, 60, { ended: true });

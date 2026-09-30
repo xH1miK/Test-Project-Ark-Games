@@ -100,7 +100,7 @@ async function closeBrowser(proc, profile, port) {
  * closes it afterwards (the whole instance, see above). Default: SwiftShader (software GL, the same on
  * any machine); `gpu`: the real GPU, for FPS numbers.
  */
-export async function withBrowser(fn, { gpu = false } = {}) {
+export async function withBrowser(fn, { gpu = false, autoplay = true } = {}) {
   // The browser inherits this process's priority class (Windows gives a below-normal parent's children
   // the same) and its processor affinity: ZM_AFFINITY (a mask, e.g. 0xFF000 = logical CPUs 12-19, this
   // laptop's efficient cores) keeps a long software-GL run cool and quiet, at a lower frame rate.
@@ -117,7 +117,8 @@ export async function withBrowser(fn, { gpu = false } = {}) {
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
     '--disable-background-networking', '--disable-component-update', '--no-pings',
     ...(gpu ? ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu-rasterization'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
-    '--autoplay-policy=no-user-gesture-required',
+    // autoplay: false = the browser's default policy (an AudioContext stays suspended until a user gesture, as on a phone).
+    ...(autoplay ? ['--autoplay-policy=no-user-gesture-required'] : []),
     'about:blank',
   ], { stdio: 'ignore' });
   let port;

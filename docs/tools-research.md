@@ -52,6 +52,7 @@ Exit code 36 = success, 32 = bad params, 34 = build error. Config JSON from Buil
 ### cocos-pnp code review (not adopted)
 - Packs every file into one JSON map (binaries as base64 inside it) → deflate (pako) → base64 → HTML + 47 KB pako.
 - Loader: SystemJS `createScript` → blob URL, `fetch` override, and `cc.assetManager.downloader.register` for known extensions; `.mp3` etc. not registered → audio goes to the engine's XHR path, which it does not hook.
+- (That was cocos-pnp. **Our packer does hook XHR** — `tools/pack/runtime.js` maps every `XMLHttpRequest.open` URL to the embedded file's blob: URL — so audio works: the engine's WebAudio player (`pal/audio/web/player-web.ts`) loads a clip with `XMLHttpRequest` (arraybuffer) + `decodeAudioData`. Proven from the packed `file://` page on 29.09 (S0 spike, AI_LOG): 0 external requests, real signal at the AudioContext output.)
 - `enableSplash:false` zeroes `splashScreen.totalTime` in the packed `settings.json` — bypasses the editor's licence gate.
 - Optional TinyPNG upload (network, off by default). Last commit 2024-06.
 

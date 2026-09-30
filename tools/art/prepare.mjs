@@ -37,6 +37,10 @@ const SPECS = {
   // Pay pad plates lying on the ground (world-space UI drawn by the main camera): under 512 wide, so
   // they go into the dynamic atlas and batch with the counter's bitmap font.
   padUpgrade: { src: 'pad_upgrade.png', out: 'assets/textures/ui/pad_upgrade.png', height: 150, format: 'png', palette: true, quality: 90, crop: 'trim' },
+  // The mute button (100 x 100 UI units, bottom-left): the two states are drawn to the same scale on the same square, so
+  // the speaker does not jump when the icon changes; no crop.
+  soundOn: { src: 'sound_on.png', out: 'assets/textures/ui/sound_on.png', size: 128, format: 'png', palette: true, quality: 90 },
+  soundOff: { src: 'sound_off.png', out: 'assets/textures/ui/sound_off.png', size: 128, format: 'png', palette: true, quality: 90 },
   padUnlock: { src: 'pad_unlock.png', out: 'assets/textures/ui/pad_unlock.png', height: 124, format: 'png', palette: true, quality: 90, crop: 'trim' },
 };
 

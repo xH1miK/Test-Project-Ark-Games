@@ -1,0 +1,9 @@
+{
+  "name": "zm-audio-tools",
+  "private": true,
+  "type": "module",
+  "description": "Synthesize the game's sounds and encode them (MP3 / WAV) into assets/",
+  "dependencies": {
+    "wasm-media-encoders": "0.7.0"
+  }
+}

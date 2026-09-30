@@ -364,6 +364,12 @@ export const Config = {
     landscapeHeight: 1400,
     /** The coin counter swells to `punchScale` and back over `punchTime` seconds when coins arrive. */
     coinHud: { punchScale: 1.16, punchTime: 0.14 },
+    /**
+     * The mute button (bottom-left, in the Hud group): the icon is 100 units, the touch area round it `touch` (a finger
+     * is bigger than 100 units of a 1280-wide frame: ~30 CSS px on a phone, 55 with the area), `margin` from the corner.
+     * Pressed, the icon shrinks to `pressScale` in `pressTime` s and springs back over `releaseTime`.
+     */
+    muteButton: { icon: 100, touch: 180, margin: 10, pressScale: 0.86, pressTime: 0.06, releaseTime: 0.2 },
   },
 
   /**
@@ -395,6 +401,40 @@ export const Config = {
       padPop: { kind: 'dust', count: 10, y: 0.7, ring: 2.4, speed: 2.2, up: [0.3, 0.9], life: [0.6, 0.9], size: [2, 4], delay: 0.1, spin: 60 },
       /** The gate opening: sparks all over the doorway, born within the opening time. */
       gate: { kind: 'spark', count: 64, y: 0, box: [2.4, 1.6, 0.15], speed: 0.4, up: [1.2, 3], life: [0.55, 1], size: [1.1, 0.3], delay: 0.7, spin: 0 },
+    },
+  },
+
+  /**
+   * Sound (numbers of the example's sound table, docs/reference-example-teardown.md §7; the clips are
+   * calibrated to the example's file levels, tools/audio/sounds.mjs). One-shots: `volume` x a random factor in
+   * `jitter`, after a play the next one waits `minInterval..maxInterval` s, the variant never repeats the last
+   * one (`random`) or steps with a pad's progress (`progress`). Loops: `volume` at full gain, `fade` seconds
+   * to go from silence to full and back. At most `maxShotsPerFrame` one-shots start in a frame and at most
+   * `maxVoices` sound at once; until a real gesture unlocks the browser's audio the start of the loops is
+   * asked again every `unlockRetry` s after each gesture. Names are the assets of assets/audio.
+   */
+  sound: {
+    maxVoices: 24,
+    maxShotsPerFrame: 4,
+    unlockRetry: 0.5,
+    historySize: 64,
+    seed: 17,
+    /** The tractor counts as moving (the engine loop runs) above this speed, units/s. */
+    engineMinSpeed: 0.3,
+    loops: {
+      music: { clip: 'music', volume: 0.3 * 0.35, fade: 0.25 },
+      engine: { clip: 'engine', volume: 0.040095, fade: 0.15 },
+      // Its level is the rollers' speed share, which already ramps.
+      grind: { clip: 'grind', volume: 0.22, fade: 0 },
+    },
+    shots: {
+      ball: { clips: ['ball_1', 'ball_2', 'ball_3', 'ball_4', 'ball_5'], volume: 0.28, jitter: [0.8, 1.2], minInterval: 0.055, maxInterval: 0.125, pick: 'random' },
+      coin: { clips: ['coin_1', 'coin_2', 'coin_3', 'coin_4', 'coin_5'], volume: 0.055, jitter: [0.7, 1.3], minInterval: 0.2, maxInterval: 0.2, pick: 'random' },
+      // The pad's coins: the same clinks, rising in pitch as the price fills.
+      spend: { clips: ['coin_1', 'coin_2', 'coin_3', 'coin_4', 'coin_5'], volume: 0.08, jitter: [1, 1], minInterval: 0.09, maxInterval: 0.16, pick: 'progress' },
+      upgrade: { clips: ['upgrade'], volume: 0.65, jitter: [1, 1], minInterval: 0, maxInterval: 0, pick: 'random' },
+      purchase: { clips: ['purchase'], volume: 0.65, jitter: [1, 1], minInterval: 0, maxInterval: 0, pick: 'random' },
+      gate: { clips: ['gate'], volume: 0.55, jitter: [1, 1], minInterval: 1, maxInterval: 1, pick: 'random' },
     },
   },
 
