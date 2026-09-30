@@ -366,10 +366,10 @@ export const Config = {
     coinHud: { punchScale: 1.16, punchTime: 0.14 },
     /**
      * The mute button (bottom-left, in the Hud group): the icon is 100 units, the touch area round it `touch` (a finger
-     * is bigger than 100 units of a 1280-wide frame: ~30 CSS px on a phone, 55 with the area), `margin` from the corner.
+     * is bigger than 100 units of a 1280-wide frame: ~30 CSS px on a phone, 61 with the area), `margin` from the corner.
      * Pressed, the icon shrinks to `pressScale` in `pressTime` s and springs back over `releaseTime`.
      */
-    muteButton: { icon: 100, touch: 180, margin: 10, pressScale: 0.86, pressTime: 0.06, releaseTime: 0.2 },
+    muteButton: { icon: 100, touch: 200, margin: 10, pressScale: 0.86, pressTime: 0.06, releaseTime: 0.2 },
   },
 
   /**
