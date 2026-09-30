@@ -183,6 +183,93 @@
     setTimeout(go, CFG.mraidTimeout || 1500);
   }
 
+  // MRAID hides an ad with `viewableChange` (a swipe away, another app in front, the ad closed), and a WebView often fires
+  // no `visibilitychange` for that. The engine and its AudioSources only obey the page's visibility, so while the
+  // container says "not viewable" (or the page really is hidden) `document.hidden` / `visibilityState` answer "hidden",
+  // and every change is announced with a `visibilitychange`. Without MRAID nothing is touched.
+  var viewability = null;
+
+  function realVisibility(name) {
+    var d = Object.getOwnPropertyDescriptor(Document.prototype, name);
+    return d && d.get ? d.get.call(document) : undefined;
+  }
+
+  function bridgeViewability(m) {
+    if (!m || typeof m.addEventListener !== 'function') return;
+    var viewable = true;
+    var announce = function () {
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    var set = function (v) {
+      v = !!v;
+      if (v === viewable) return;
+      viewable = v;
+      announce();
+    };
+    var read = function () {
+      try {
+        if (typeof m.isViewable === 'function') set(m.isViewable());
+      } catch (e) {
+        /* the container is not ready to answer: keep assuming viewable */
+      }
+    };
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: function () {
+        return !viewable || !!realVisibility('hidden');
+      },
+    });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function () {
+        return viewable ? realVisibility('visibilityState') : 'hidden';
+      },
+    });
+    m.addEventListener('viewableChange', set);
+    m.addEventListener('ready', read); // a container that answered late
+    read();
+    // The engine starts listening later than this: say "hidden" again once it runs.
+    viewability = {
+      resync: function () {
+        if (!viewable) announce();
+      },
+    };
+  }
+
+  // `?stats`: a small readout over the game (engine frames per second, the longest frame of the last second, draw calls),
+  // for judging speed on a phone that has no DevTools. Plain DOM: the engine's own profiler is cropped out of the build.
+  function showStats() {
+    var el = document.createElement('div');
+    el.style.cssText =
+      'position:fixed;z-index:20;left:calc(env(safe-area-inset-left,0px) + 6px);top:calc(env(safe-area-inset-top,0px) + 6px);' +
+      'padding:3px 6px;border-radius:4px;background:rgba(0,0,0,.55);color:#9f9;font:12px/1.3 monospace;pointer-events:none;white-space:pre';
+    document.body.appendChild(el);
+    var t0 = performance.now();
+    var last = t0;
+    var worst = 0;
+    var frames0 = 0;
+    var tick = function (now) {
+      worst = Math.max(worst, now - last);
+      last = now;
+      if (now - t0 >= 1000) {
+        var d = window.cc && window.cc.director;
+        var frames = d && d.getTotalFrames ? d.getTotalFrames() : 0;
+        var dc = -1;
+        try {
+          dc = d.root.device.numDrawCalls;
+        } catch (e) {
+          /* the engine is not up yet */
+        }
+        el.textContent = 'fps ' + ((frames - frames0) * 1000 / (now - t0)).toFixed(0) + '  worst ' + worst.toFixed(0) + ' ms  dc ' + dc;
+        frames0 = frames;
+        t0 = now;
+        worst = 0;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   function text(path) {
     return new TextDecoder().decode(files[path]);
   }
@@ -203,6 +290,7 @@
       if (frames > 2) {
         T.firstFrames = performance.now();
         if (el) el.parentNode.removeChild(el);
+        if (viewability) viewability.resync();
         return;
       }
       requestAnimationFrame(tick);
@@ -212,6 +300,8 @@
 
   function boot() {
     T.boot = performance.now();
+    bridgeViewability(window.mraid);
+    if (/[?&]stats(=|&|$)/.test(location.search)) showStats();
     // The import map must be in the DOM before SystemJS initialises (it scans once on load).
     inlineScript(JSON.stringify(CFG.importMap || { imports: {} }), 'systemjs-importmap');
     for (var i = 0; i < CFG.scripts.length; i++) inlineScript(text(CFG.scripts[i]));

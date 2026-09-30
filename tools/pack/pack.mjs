@@ -80,7 +80,9 @@ const rB64 = Buffer.concat(sections[1]).toString('base64');
 
 // ---- page -----------------------------------------------------------------------------------------
 const css = cssFiles.map((f) => read(f).toString('utf8')).join('\n');
+// The page is one canvas that the finger steers on: no scrolling, no pull-to-refresh, no rubber band, no zoom or long-press menu.
 const loaderCss = `
+html,body{overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
 #zm-loading{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:#334c78;z-index:10}
 #zm-loading:after{content:"";width:44px;height:44px;border-radius:50%;border:5px solid rgba(255,255,255,.25);border-top-color:#fff;animation:zm-spin .8s linear infinite}
 #zm-loading[data-error]:after{content:attr(data-error);width:auto;height:auto;border:0;border-radius:0;animation:none;color:#fff;font:14px sans-serif;padding:16px}
@@ -94,7 +96,7 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <title>${title}</title>
-<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,minimal-ui=true">
+<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,minimal-ui=true,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
