@@ -9,6 +9,9 @@
 //     the screen (world points projected through the main camera, as shares of the screen);
 //   * real touches (DevTools input events): the stick steers from a touch at the middle of the screen and the mute button
 //     toggles at its new place (the hit areas follow the layout).
+//   * cut-outs and rounded corners (the DevTools safe-area override, CSS env(safe-area-inset-*)): the Hud (coin counter, mute
+//     button) keeps inside the safe area, the joystick's ring rests above a home indicator, the touch area still covers the
+//     whole page, and a tap on the moved mute button still works; the gaps go away when the override is cleared.
 // The chain starts from the size the page was opened at (fresh load: the first step measures it before any resize), so
 // run it also with other --size values: 360x640, 412x915, 1024x768 ...
 //
@@ -146,5 +149,66 @@ export default async function sizes(t) {
     rows.push({ label, aspect: s.aspect, framing: s.framing, tractor, shredder, plate: plate.w, mute: mute.w, ring: ring.w, title: title && title.w, problems });
     t.check(problems.length === 0, `${label} (aspect ${s.aspect.toFixed(2)}, framing ${s.framing.toFixed(2)}): ${problems.length ? problems.join('; ') : 'layout, world and touches are all right'}`);
   }
+  await checkSafeArea(t);
   t.log('sizes: ' + rows.map((r) => `${r.label} counter ${r.plate.toFixed(0)}px mute ${r.mute.toFixed(0)}px ring ${r.ring.toFixed(0)}px${r.title ? ' title ' + r.title.toFixed(0) + 'px' : ''} tractor ${fmt(r.tractor)} shredder ${fmt(r.shredder)}`).join('\n  | '));
+}
+
+/** [width, height, insets (CSS px)] : a portrait phone with a notch and a home indicator, landscape ones with the cut-out on one or both sides. */
+const SAFE_CASES = [
+  ['portrait notch + home indicator', 390, 844, { top: 47, bottom: 34, left: 0, right: 0 }],
+  ['landscape, cut-out on both sides', 844, 390, { top: 0, bottom: 21, left: 47, right: 47 }],
+  ['landscape, punch hole on one side', 915, 412, { top: 0, bottom: 0, left: 0, right: 44 }],
+];
+
+async function checkSafeArea(t) {
+  try {
+    await t.safeArea({});
+  } catch (err) {
+    t.log(`safe area: this browser has no safe-area override (${err.message}); not checked here`);
+    return;
+  }
+  for (const [label, w, h, gap] of SAFE_CASES) {
+    const problems = [];
+    const check = (ok, message) => { if (!ok) problems.push(message); };
+    await t.safeArea(gap);
+    // The page learns of new insets with a resize, as on a real rotation: nudge the size and put it back.
+    await t.resize(w, h + 1, 2);
+    await t.frames(3);
+    await t.resize(w, h, 2);
+    await t.frames(4);
+    await t.sleep(300);
+    const page = { w, h };
+    const plate = await t.evaluate(PAGE('Canvas/Hud/CoinHud/Plate'));
+    const mute = await t.evaluate(PAGE('Canvas/Hud/MuteButton'));
+    const ring = await t.evaluate(PAGE('Canvas/Joystick/Base'));
+    const area = await t.evaluate(PAGE('Canvas/Joystick'));
+    const eps = 1.5; // a device pixel or two of rounding
+    check(plate.top >= gap.top - eps && plate.right <= w - gap.right + eps, `the coin counter is inside the safe area (top ${plate.top.toFixed(0)} >= ${gap.top}, right edge ${plate.right.toFixed(0)} <= ${w - gap.right})`);
+    check(mute.left >= gap.left - eps && mute.bottom <= h - gap.bottom + eps, `the mute button is inside the safe area (left ${mute.left.toFixed(0)} >= ${gap.left}, bottom ${mute.bottom.toFixed(0)} <= ${h - gap.bottom})`);
+    check(ring.bottom <= h - gap.bottom + eps && ring.left >= gap.left - eps && ring.right <= w - gap.right + eps, 'the joystick ring at rest is inside the safe area');
+    check(Math.abs(ring.cx - (gap.left + (w - gap.right)) / 2) < 0.02 * w, `the ring rests at the middle of the safe area (${ring.cx.toFixed(0)} vs ${((gap.left + w - gap.right) / 2).toFixed(0)})`);
+    check(area.left <= 0.5 && area.top <= 0.5 && area.right >= w - 0.5 && area.bottom >= h - 0.5, 'the joystick touch area still covers the whole page');
+    const before = await t.evaluate('__zm.sound.muted');
+    await t.touch('touchStart', mute.cx, mute.cy);
+    await t.sleep(80);
+    await t.touch('touchEnd', mute.cx, mute.cy);
+    await t.sleep(250);
+    check((await t.evaluate('__zm.sound.muted')) !== before, 'a tap on the moved mute button toggles the sound');
+    await t.touch('touchStart', mute.cx, mute.cy);
+    await t.sleep(80);
+    await t.touch('touchEnd', mute.cx, mute.cy);
+    await t.sleep(250);
+    await t.shot(`safe-${label.replace(/\W+/g, '-')}`);
+    t.check(problems.length === 0, `safe area, ${label} (${JSON.stringify(gap)}): ${problems.length ? problems.join('; ') : 'the Hud keeps inside, the joystick rests inside, touches work'}`);
+  }
+  // Cleared: everything back where it was.
+  await t.safeArea({});
+  await t.resize(390, 845, 2);
+  await t.frames(3);
+  await t.resize(390, 844, 2);
+  await t.frames(4);
+  await t.sleep(300);
+  const plate = await t.evaluate(PAGE('Canvas/Hud/CoinHud/Plate'));
+  const mute = await t.evaluate(PAGE('Canvas/Hud/MuteButton'));
+  t.check(plate.top < 0.05 * 844 && 390 - plate.right < 0.1 * 390 && mute.left < 0.1 * 390 && 844 - mute.bottom < 0.1 * 844, 'the override cleared: the Hud is back in the corners');
 }
